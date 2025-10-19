@@ -133,7 +133,7 @@ function createDeckCard(deck) {
       <div class="deck-rank">#${deck.rank}</div>
     </div>
     
-    <div class="tier-badge tier-${escapeHtml(deck.tier.replace('+', '\\+'))}">${escapeHtml(deck.tier)}</div>
+    <div class="tier-badge tier-${escapeHtml(deck.tier)}">${escapeHtml(deck.tierDisplay)}</div>
     
     <div class="deck-stats">
       <div class="stat-item">
