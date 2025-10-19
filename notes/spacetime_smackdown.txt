@@ -1,5 +1,3 @@
-242 tournaments, 41962 players, 100140 matches
-
 const decks = [
   { deck_name: "Exeggutor ex Celebi ex", count: 5393, wins: 15010, losses: 12323, ties: 300 },
   { deck_name: "Darkrai ex Magnezone", count: 4061, wins: 11603, losses: 9397, ties: 215 },
