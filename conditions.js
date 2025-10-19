@@ -1523,12 +1523,12 @@ const hierarchicalBayesian = (allData) => {
 };
 
 /**
- * Convert win percentage to strength score (0-100+ scale)
+ * Convert win percentage to rating score (0-100+ scale)
  * 
  * @param {number} winPct - Win percentage on 0-1 scale
- * @returns {number} Strength score (typically 0-180 before normalization)
+ * @returns {number} Rating score (typically 0-180 before normalization)
  */
-const calculateStrength = (winPct) => winPct * 1.8;
+const calculateRating = (winPct) => winPct * 1.8;
 
 // Prepare data for hierarchical Bayesian calculation
 const bayesianInput = enrichedDecks.map((deck, index) => [
@@ -1547,13 +1547,13 @@ enrichedDecks.forEach((deck, index) => {
   const bayesianData = bayesianResults[index];
   
   // RATING
-  // Based on the strength score from the lower confidence bound
+  // Based on the rating score from the lower confidence bound
   // This conservative approach:
   // - Penalizes decks with limited data
   // - Rewards consistent performance with large sample sizes
   // - Prevents fluky high win rates from dominating rankings
   // Scale: 0-100+ (though typically maxes around 180 before normalization)
-  deck.rating = calculateStrength(bayesianData.adjustedLowerBound) * 100;
+  deck.rating = calculateRating(bayesianData.adjustedLowerBound) * 100;
 });
 
 // ============================================================================
