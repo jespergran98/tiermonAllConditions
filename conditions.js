@@ -1848,7 +1848,7 @@ const calculateRating = (bound) => {
   
   // Use exponential scaling to reward higher win rates
   const baseline = 0.50; // 50% win rate baseline
-  const scale = 173; // Scaling factor
+  const scale = 175; // Scaling factor
   
   return bound * scale;
 };
