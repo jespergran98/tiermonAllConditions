@@ -1,0 +1,95 @@
+# Deck Analysis Conditions
+
+The data retrieved from the API includes deck name, count (number of tournament appearances), wins, losses and ties. From these, the following conditions are derived to filter and evaluate decks in a trading card game (TCG) metagame. All conditions support min/max bounds where applicable, and percentiles are calculated across the dataset with 100 representing the highest value for the metric (e.g., a min of 75 targets the top 25%).
+
+### rating
+An advanced algorithm computes a score from 0 to 100, assigning an official rating to the deck and placing it into a corresponding tier based on predefined thresholds.
+Example: "rating: { min: 75, max: 85 }" means the deck's rating is between 75 and 85.
+
+### rating_pct
+Specifies the deck's percentile ranking based on its rating (higher percentile = higher rating).
+Example: "rating_pct: { min: 75 }" means the deck is in at least the 75th percentile by rating (top 25%).
+
+### rank
+The deck's position in the overall ranking, sorted by rating (lower rank number = better performance).
+Example: "rank: { min: 3 }" means the deck is ranked 3 or better (e.g., 1, 2, or 3).
+
+### rank_pct
+The deck's percentile placement in the ranking (higher percentile = better rank).
+Example: "rank_pct: { min: 90, max: 97 }" means the deck is in the 90th to 97th percentile by rank (top 10%, excluding the top 3%).
+
+### count
+The raw number of times the deck appeared in tournaments (directly from API data, not derived).
+Example: "count: { min: 50 }" means the deck appeared in at least 50 tournaments.
+
+### count_pct
+The deck's percentile ranking based on its count (higher percentile = more appearances).
+Example: "count_pct: { min: 1, max: 5 }" means the deck's count is in the 1st to 5th percentile (among the least played decks, representing roughly 1% to 5% of total appearances when percentiles align with distribution).
+
+count_rounded
+The deck's raw number of tournament appearances, rounded to the nearest 5, 10, or 50 (depending on scale).
+Example: "This underdog deck appeared in {count_rounded}+ tournaments"
+
+### share
+The deck's usage percentage in the metagame, calculated as (count / total Count) × 100
+Example: "share: { min: 0.4, max: 5.00 }" means the deck represents between 0.4% and 5% of all tournament entries.
+
+### share_compared_to_most_played_deck
+The deck's share relative to the most popular deck, expressed as a percentage.
+Example: "share_compared_to_most_played_deck: { min: 10 }" means the deck's share is at least 10% of the most played deck's share.
+
+### share_rounded
+The deck's usage percentage in the metagame, calculated as (count / total Count) × 100, rounded to the nearest whole number.
+rounded is mostly used in template descriptions, for example: "This deck shines through the top of the META, even at only { share_rounded } of the meta share"
+
+### total_matches
+The deck's total number of matches played, calculated as wins + losses + ties.
+Example: "total_matches: { min: 1000, max: 5000 }" means the deck was played between 1000 and 5000 times.
+
+### total_matches_pct
+The deck's percentile ranking based on total_matches (higher percentile = more matches played).
+Example: "total_matches_pct: { min: 2 }" means the deck's total_matches are in at least the 2nd percentile (more than the bottom 2%, i.e., played in more than roughly 2% of total matches across all decks when percentiles align with distribution).
+
+### total_matches_rounded
+The deck's total number of matches played, calculated as wins + losses + ties, rounded to the nearest hundred/thousand
+rounded is mainly used in descriptions, for example: Example: "the deck dominates the meta with {total_matches_rounded}+ matches"
+
+### win_rate
+The deck's standard win percentage, calculated as (wins / total_matches) × 100.
+Example: "win_rate: { min: 50.5, max: 57 }" means the deck's win rate is between 50.5% and 57%.
+
+### win_rate_pct
+The deck's percentile ranking based on win_rate (higher percentile = higher win rate).
+Example: "win_rate_pct: { min: 80 }" means the deck is in at least the 80th percentile by win rate (top 20% highest win rates).
+
+### win_rate_rounded
+The deck's standard win percentage, calculated as (wins / total_matches) × 100, rounded to the nearest whole number.
+rounded is mainly used in template descriptions, for example "it erases the competition from existence with a {win_rate_rounded} win rate."
+
+### adjusted_win_rate
+The deck's win rate adjusted for ties, calculated as [(wins + 0.5 × ties) / total_matches] × 100.
+Example: "adjusted_win_rate: { min: 54 }" means the deck has an adjusted win rate of at least 54%.
+
+### adjusted_win_rate_pct
+The deck's percentile ranking based on adjusted_win_rate (higher percentile = higher adjusted win rate).
+Example: "adjusted_win_rate_pct: { max: 20 }" means the deck is in no higher than the 20th percentile by adjusted win rate (bottom 20%, among the lowest adjusted win rates).
+
+### avg_matches_per_entry
+The average number of matches per tournament appearance, calculated as total_matches / count.
+Example: "avg_matches_per_entry: { min: 5.5 }" means the deck averaged at least 5.5 matches per tournament entry (indicating deeper runs on average).
+
+### avg_matches_per_entry_pct
+The deck's percentile ranking based on avg_matches_per_entry (higher percentile = deeper tournament runs).
+Example: "avg_matches_per_entry_pct: { min: 90 }" means the deck is in at least the 90th percentile for average matches per entry (top 10% for tournament progression).
+
+### meta_impact
+A score reflecting the deck's overall metagame influence, calculated as adjusted_win_rate × share.
+Example: "meta_impact: { min: 500 }" means the deck has a meta impact score of at least 500.
+
+### meta_impact_pct
+The deck's percentile ranking based on meta_impact (higher percentile = greater influence).
+Example: "meta_impact_pct: { min: 75 }" means the deck is in at least the 75th percentile by meta impact (top 25% most influential decks).
+
+### tier
+The deck's assigned tier based on its rating (e.g., S, A, B, C, with S being the highest).
+Example: "tier: { min: C, max: S }" means the deck is in tier C or higher (up to S).

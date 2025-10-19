@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deck Statistics Viewer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Competitive Deck Statistics</h1>
+            <div class="stats-summary">
+                <span id="totalDecks">Loading...</span>
+                <span id="totalMatches">Loading...</span>
+            </div>
+        </header>
+
+        <div class="controls">
+            <div class="search-box">
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    placeholder="Search decks by name..."
+                    autocomplete="off"
+                >
+            </div>
+            
+            <div class="filter-controls">
+                <select id="sortSelect">
+                    <option value="rank">Sort by Rank</option>
+                    <option value="rating">Sort by Rating</option>
+                    <option value="winRate">Sort by Win Rate</option>
+                    <option value="count">Sort by Popularity</option>
+                    <option value="metaImpact">Sort by Meta Impact</option>
+                </select>
+
+                <select id="tierFilter">
+                    <option value="all">All Tiers</option>
+                    <option value="X">Tier X</option>
+                    <option value="S+">Tier S+</option>
+                    <option value="S">Tier S</option>
+                    <option value="A">Tier A</option>
+                    <option value="B">Tier B</option>
+                    <option value="C">Tier C</option>
+                    <option value="D">Tier D</option>
+                    <option value="E">Tier E</option>
+                    <option value="F">Tier F</option>
+                </select>
+
+                <div class="view-toggle">
+                    <button id="gridView" class="active">Grid</button>
+                    <button id="listView">List</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="deckContainer" class="deck-grid">
+            <!-- Decks will be rendered here -->
+        </div>
+
+        <div id="loadingIndicator" class="loading">
+            <div class="spinner"></div>
+            <p>Loading decks...</p>
+        </div>
+
+        <div id="noResults" class="no-results" style="display: none;">
+            <p>No decks found matching your criteria.</p>
+        </div>
+    </div>
+
+    <script src="conditions.js"></script>
+    <script src="renderDecks.js"></script>
+</body>
+</html>
