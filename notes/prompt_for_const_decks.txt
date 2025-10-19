@@ -1,19 +1,8 @@
 Create a list of all the 1000+ pokemon decks, in this structure:
 
 const decks = [
-  {
-    deck_name: "",
-    count: ,
-    wins: ,
-    losses: ,
-    ties: 
-  },
-  {
-    deck_name: "",
-    count: ,
-    wins: ,
-    losses: ,
-    ties: 
-  }
+  { deck_name: "", count: , wins: , losses: , ties:  },
+  { deck_name: "", count: , wins: , losses: , ties:  }
+];
 
-Do this with all the decks.
+Do this with all the decks. Provide the code in a code canvas.
