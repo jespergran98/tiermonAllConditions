@@ -926,7 +926,7 @@ const decks = [
   { deck_name: "Jumpluff ex Tapu Koko ex", count: 1, wins: 0, losses: 2, ties: 0 },
   { deck_name: "Jumpluff ex Gallade ex", count: 1, wins: 0, losses: 1, ties: 0 },
   { deck_name: "Alolan Raichu ex Togedemaru", count: 1, wins: 0, losses: 2, ties: 0 },
-  { deck_name: "Lanturn ex Raikou ex", count: 1, wins: 0, losses: 1, ties: 0 }
+  { deck_name: "Lanturn ex Raikou ex", count: 1, wins: 0, losses: 1, ties: 0 },
   { deck_name: "Guzzlord ex Mantyke", count: 1, wins: 2, losses: 3, ties: 0 },
   { deck_name: "Primarina ex Mantyke", count: 1, wins: 2, losses: 3, ties: 0 },
   { deck_name: "Infernape ex Blacephalon", count: 1, wins: 2, losses: 3, ties: 0 },
