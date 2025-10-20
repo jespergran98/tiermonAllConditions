@@ -14,10 +14,6 @@ rank
 The deck's position in the overall ranking, sorted by rating (lower rank number = better performance).
 Example: "rank: { min: 3 }" means the deck is ranked 3 or better (e.g., 1, 2, or 3).
 
-rank_pct
-The deck's percentile placement in the ranking (higher percentile = better rank).
-Example: "rank_pct: { min: 90, max: 97 }" means the deck is in the 90th to 97th percentile by rank (top 10%, excluding the top 3%).
-
 count
 The raw number of times the deck appeared in tournaments (directly from API data, not derived).
 Example: "count: { min: 50 }" means the deck appeared in at least 50 tournaments.
