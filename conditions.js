@@ -1330,7 +1330,7 @@ const enrichedDecks = decks.map((deck) => {
 
   // ADJUSTED WIN RATE
   // Treats ties as half-wins for a more nuanced performance measure
-  // Formula: (wins + 0.5 Ã— ties) / total_matches Ã— 100
+  // Formula: (wins + 0.5 * ties) / total_matches * 100
   const adjusted_win_rate =
     ((deck.wins + 0.5 * deck.ties) / total_matches) * 100;
 
@@ -1361,13 +1361,13 @@ const mostPlayedDeckCount = Math.max(...enrichedDecks.map((d) => d.count));
 enrichedDecks.forEach((deck) => {
   // SHARE
   // Deck's percentage of total tournament entries
-  // Formula: (count / totalCount) Ã— 100
+  // Formula: (count / totalCount) * 100
   // Example: If deck has 500 entries out of 5000 total, share = 10%
   deck.share = (deck.count / totalCount) * 100;
 
   // SHARE COMPARED TO MOST PLAYED DECK
   // Relative popularity compared to the #1 most played deck
-  // Formula: (deck.share / most_played_share) Ã— 100
+  // Formula: (deck.share / most_played_share) * 100
   // Example: If deck has 5% share and top deck has 20%, result = 25%
   const mostPlayedShare = (mostPlayedDeckCount / totalCount) * 100;
   deck.share_compared_to_most_played_deck =
@@ -1381,7 +1381,7 @@ enrichedDecks.forEach((deck) => {
 enrichedDecks.forEach((deck) => {
   // META IMPACT
   // Measures overall influence on the metagame
-  // Formula: adjusted_win_rate Ã— share
+  // Formula: adjusted_win_rate * share
   // High values indicate decks that are both popular AND successful
   // Low values indicate niche or underperforming decks
   deck.meta_impact = deck.adjusted_win_rate * deck.share;
