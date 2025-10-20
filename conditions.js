@@ -23,28 +23,22 @@
 // ============================================================================
 
 const decks = [
-  { deck_name: "Suicune ex Greninja", count: 2473, wins: 6996, losses: 5981, ties: 306 },
-  { deck_name: "Giratina ex Darkrai ex", count: 1450, wins: 3981, losses: 3546, ties: 212 },
-  { deck_name: "Guzzlord ex", count: 805, wins: 2130, losses: 1966, ties: 101 },
-  { deck_name: "Flareon ex Eevee ex", count: 578, wins: 1552, losses: 1433, ties: 49 },
-  { deck_name: "Espeon ex Sylveon ex", count: 350, wins: 880, losses: 832, ties: 32 },
-  { deck_name: "Darkrai ex Arceus ex", count: 264, wins: 715, losses: 672, ties: 27 },
-  { deck_name: "Buzzwole ex Pheromosa", count: 256, wins: 652, losses: 636, ties: 22 },
-  { deck_name: "Dragonite ex Dragonite", count: 214, wins: 460, losses: 523, ties: 17 },
-  { deck_name: "Arceus ex Pichu", count: 211, wins: 537, losses: 514, ties: 15 },
-  { deck_name: "Greninja Oricorio", count: 207, wins: 585, losses: 462, ties: 46 },
-  { deck_name: "Charizard ex", count: 160, wins: 401, losses: 382, ties: 17 },
-  { deck_name: "Decidueye ex Decidueye", count: 158, wins: 379, losses: 378, ties: 28 },
-  { deck_name: "Silvally Rampardos", count: 152, wins: 440, losses: 397, ties: 26 },
-  { deck_name: "Silvally Zeraora", count: 150, wins: 396, losses: 368, ties: 17 },
-  { deck_name: "Suicune ex Giratina ex", count: 148, wins: 415, losses: 358, ties: 17 },
-  { deck_name: "Raikou ex Magnezone", count: 147, wins: 332, losses: 371, ties: 7 },
-  { deck_name: "Dragonite ex Sylveon ex", count: 125, wins: 321, losses: 305, ties: 7 },
-  { deck_name: "Tapu Koko ex Oricorio", count: 123, wins: 319, losses: 324, ties: 9 },
-  { deck_name: "Raikou ex Pikachu ex", count: 115, wins: 268, losses: 321, ties: 3 },
-  { deck_name: "Raikou ex Tapu Koko ex", count: 112, wins: 286, losses: 270, ties: 11 },
-  { deck_name: "Exeggutor ex Alolan Exeggutor", count: 108, wins: 257, losses: 291, ties: 6 },
-  { deck_name: "Tapu Koko ex Pikachu ex", count: 93, wins: 229, losses: 201, ties: 5 }
+  { deck_name: "Exeggutor ex Celebi ex", count: 5393, wins: 15010, losses: 12323, ties: 300 },
+  { deck_name: "Darkrai ex Magnezone", count: 4061, wins: 11603, losses: 9397, ties: 215 },
+  { deck_name: "Charizard ex Moltres ex", count: 3388, wins: 7530, losses: 7881, ties: 134 },
+  { deck_name: "Darkrai ex Greninja", count: 1973, wins: 5399, losses: 4538, ties: 104 },
+  { deck_name: "Gyarados ex Greninja", count: 1807, wins: 4161, losses: 4291, ties: 67 },
+  { deck_name: "Palkia ex Vaporeon", count: 1730, wins: 4241, losses: 4059, ties: 67 },
+  { deck_name: "Magnezone Skarmory", count: 1699, wins: 4602, losses: 3972, ties: 62 },
+  { deck_name: "Weavile ex Darkrai ex", count: 1279, wins: 3138, losses: 2989, ties: 45 },
+  { deck_name: "Magnezone Hitmonlee", count: 926, wins: 2499, losses: 2224, ties: 35 },
+  { deck_name: "Exeggutor ex Mew ex", count: 827, wins: 2356, losses: 2011, ties: 52 },
+  { deck_name: "Pachirisu ex", count: 816, wins: 2094, losses: 1900, ties: 28 },
+  { deck_name: "Yanmega ex Dialga ex", count: 707, wins: 1764, losses: 1618, ties: 25 },
+  { deck_name: "Exeggutor ex Yanmega ex", count: 692, wins: 1728, losses: 1654, ties: 32 },
+  { deck_name: "Mewtwo ex Gardevoir", count: 642, wins: 1051, losses: 1520, ties: 31 },
+  { deck_name: "Rampardos Lucario", count: 493, wins: 1308, losses: 1180, ties: 20 },
+  { deck_name: "Infernape ex Moltres ex", count: 471, wins: 969, losses: 1131, ties: 9 }
 ];
 
 // ============================================================================
@@ -68,37 +62,34 @@ function calculatePercentile(value, sortedArray) {
 }
 
 /**
- * Round a number to the nearest specified interval
+ * Format a number with "k" notation for thousands
  * 
- * @param {number} num - Number to round
- * @param {number} interval - Rounding interval (5, 10, 50, 100, etc.)
- * @returns {number} Rounded number
- * 
- * @example
- * roundToNearest(123, 10) // Returns 120
- * roundToNearest(127, 10) // Returns 130
- */
-function roundToNearest(num, interval) {
-  return Math.round(num / interval) * interval;
-}
-
-/**
- * Determine appropriate rounding interval based on number magnitude
- * Uses smart scaling to keep rounded numbers readable
- * 
- * @param {number} num - Number to analyze
- * @returns {number} Appropriate interval (5, 10, 50, or 100)
+ * @param {number} num - Number to format
+ * @returns {string} Formatted string with "k" for thousands
  * 
  * @example
- * getSmartRoundingInterval(75)    // Returns 5
- * getSmartRoundingInterval(450)   // Returns 10
- * getSmartRoundingInterval(5000)  // Returns 50
+ * formatWithK(500) // Returns "500"
+ * formatWithK(1500) // Returns "1.5k"
+ * formatWithK(4800) // Returns "4.8k"
+ * formatWithK(5743) // Returns "5k+"
+ * formatWithK(13765) // Returns "13k+"
  */
-function getSmartRoundingInterval(num) {
-  if (num < 100) return 5;
-  if (num < 1000) return 10;
-  if (num < 10000) return 50;
-  return 100;
+function formatWithK(num) {
+  if (num < 1000) {
+    return num.toString();
+  }
+  
+  const thousands = num / 1000;
+  
+  // Round to appropriate decimal places based on magnitude
+  if (thousands >= 5) {
+    // 5k+ - round down and add "+" suffix
+    return Math.floor(thousands) + 'k+';
+  } else {
+    // 1k-4.9k - one decimal place if not a whole number
+    const rounded = Math.round(thousands * 10) / 10;
+    return (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)) + 'k';
+  }
 }
 
 // ============================================================================
@@ -554,15 +545,12 @@ enrichedDecks.forEach(deck => {
 
 enrichedDecks.forEach(deck => {
   // COUNT ROUNDED
-  // Rounded for display purposes (e.g., "350+" instead of "347")
-  // Uses smart intervals based on magnitude
-  const countInterval = getSmartRoundingInterval(deck.count);
-  deck.count_rounded = roundToNearest(deck.count, countInterval);
+  // Formatted with "k" notation for thousands (e.g., "13k" instead of "13376")
+  deck.count_rounded = formatWithK(deck.count);
   
   // TOTAL MATCHES ROUNDED
-  // Rounded to nearest 100 or 1000 for cleaner display
-  const matchesInterval = deck.total_matches < 1000 ? 100 : 1000;
-  deck.total_matches_rounded = roundToNearest(deck.total_matches, matchesInterval);
+  // Formatted with "k" notation for thousands
+  deck.total_matches_rounded = formatWithK(deck.total_matches);
   
   // WIN RATE ROUNDED
   // Rounded to nearest whole percentage for display
@@ -594,8 +582,8 @@ enrichedDecks
     
     // BASIC STATISTICS
     console.log('BASIC STATISTICS:');
-    console.log(`  Count: ${deck.count} (rounded: ${deck.count_rounded}+)`);
-    console.log(`  Total Matches: ${deck.total_matches} (rounded: ${deck.total_matches_rounded}+)`);
+    console.log(`  Count: ${deck.count} (rounded: ${deck.count_rounded})`);
+    console.log(`  Total Matches: ${deck.total_matches} (rounded: ${deck.total_matches_rounded})`);
     console.log(`  Record: ${deck.wins}W - ${deck.losses}L - ${deck.ties}T`);
     console.log();
     
