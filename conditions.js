@@ -1330,17 +1330,17 @@ const enrichedDecks = decks.map(deck => {
   // Formula: (wins + 0.5 * ties) / total_matches * 100
   const adjusted_win_rate = ((deck.wins + 0.5 * deck.ties) / total_matches) * 100;
   
-  // AVERAGE MATCHES PER ENTRY
+  // AVERAGE TOURNAMENT DEPTH
   // Indicates tournament depth - higher values mean the deck progresses further
   // Formula: total_matches / count
-  const avg_matches_per_entry = total_matches / deck.count;
+  const avg_tournament_depth = total_matches / deck.count;
   
   return {
     ...deck,
     total_matches,
     win_rate,
     adjusted_win_rate,
-    avg_matches_per_entry
+    avg_tournament_depth
   };
 });
 
@@ -1711,7 +1711,7 @@ const sortedCounts = enrichedDecks.map(d => d.count).sort((a, b) => a - b);
 const sortedTotalMatches = enrichedDecks.map(d => d.total_matches).sort((a, b) => a - b);
 const sortedWinRates = enrichedDecks.map(d => d.win_rate).sort((a, b) => a - b);
 const sortedAdjustedWinRates = enrichedDecks.map(d => d.adjusted_win_rate).sort((a, b) => a - b);
-const sortedAvgMatches = enrichedDecks.map(d => d.avg_matches_per_entry).sort((a, b) => a - b);
+const sortedAvgMatches = enrichedDecks.map(d => d.avg_tournament_depth).sort((a, b) => a - b);
 const sortedMetaImpact = enrichedDecks.map(d => d.meta_impact).sort((a, b) => a - b);
 const sortedRanks = enrichedDecks.map(d => d.rank).sort((a, b) => a - b);
 
@@ -1741,10 +1741,10 @@ enrichedDecks.forEach(deck => {
   // Performance metric that treats ties as half-wins
   deck.adjusted_win_rate_pct = calculatePercentile(deck.adjusted_win_rate, sortedAdjustedWinRates);
   
-  // AVERAGE MATCHES PER ENTRY PERCENTILE
+  // AVERAGE TOURNAMENT DEPTH PERCENTILE
   // Higher average = higher percentile
   // Indicates tournament depth/success per entry
-  deck.avg_matches_per_entry_pct = calculatePercentile(deck.avg_matches_per_entry, sortedAvgMatches);
+  deck.avg_tournament_depth_pct = calculatePercentile(deck.avg_tournament_depth, sortedAvgMatches);
   
   // META IMPACT PERCENTILE
   // Higher meta impact = higher percentile
@@ -1804,7 +1804,7 @@ enrichedDecks
     console.log('PERFORMANCE METRICS:');
     console.log(`  Win Rate: ${deck.win_rate.toFixed(2)}% (rounded: ${deck.win_rate_rounded}%)`);
     console.log(`  Adjusted Win Rate: ${deck.adjusted_win_rate.toFixed(2)}%`);
-    console.log(`  Avg Matches per Entry: ${deck.avg_matches_per_entry.toFixed(2)}`);
+    console.log(`  Avg Tournament Depth: ${deck.avg_tournament_depth.toFixed(2)}`);
     console.log();
     
     // META STATISTICS
@@ -1828,7 +1828,7 @@ enrichedDecks
     console.log(`  Total Matches Percentile: ${deck.total_matches_pct.toFixed(1)}%`);
     console.log(`  Win Rate Percentile: ${deck.win_rate_pct.toFixed(1)}%`);
     console.log(`  Adjusted Win Rate Percentile: ${deck.adjusted_win_rate_pct.toFixed(1)}%`);
-    console.log(`  Avg Matches Percentile: ${deck.avg_matches_per_entry_pct.toFixed(1)}%`);
+    console.log(`  Avg Matches Percentile: ${deck.avg_tournament_depth_pct.toFixed(1)}%`);
     console.log(`  Meta Impact Percentile: ${deck.meta_impact_pct.toFixed(1)}%`);
     console.log();
     console.log('='.repeat(80));
@@ -1845,11 +1845,11 @@ console.log();
 // This section verifies that all required deck analysis conditions are present
 const requiredConditions = [
   'deck_name', 'count', 'wins', 'losses', 'ties',
-  'total_matches', 'win_rate', 'adjusted_win_rate', 'avg_matches_per_entry',
+  'total_matches', 'win_rate', 'adjusted_win_rate', 'avg_tournament_depth',
   'share', 'share_compared_to_most_played_deck', 'meta_impact',
   'rating', 'tier', 'tier_display', 'rank',
   'rating_pct', 'count_pct', 'total_matches_pct', 'win_rate_pct', 'adjusted_win_rate_pct',
-  'avg_matches_per_entry_pct', 'meta_impact_pct',
+  'avg_tournament_depth_pct', 'meta_impact_pct',
   'count_rounded', 'total_matches_rounded', 'win_rate_rounded', 'share_rounded'
 ];
 

@@ -169,7 +169,7 @@ function createDeckCard(deck) {
     <div class="deck-meta">
       <div class="meta-tag">${deck.count} entries</div>
       <div class="meta-tag">${deck.total_matches.toLocaleString()} matches</div>
-      <div class="meta-tag">${deck.avg_matches_per_entry.toFixed(1)} avg depth</div>
+      <div class="meta-tag">${deck.avg_tournament_depth.toFixed(1)} avg depth</div>
     </div>
   `;
   

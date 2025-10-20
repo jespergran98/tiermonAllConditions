@@ -70,13 +70,13 @@ adjusted_win_rate_pct
 The deck's percentile ranking based on adjusted_win_rate (higher percentile = higher adjusted win rate).
 Example: "adjusted_win_rate_pct: { max: 20 }" means the deck is in no higher than the 20th percentile by adjusted win rate (bottom 20%, among the lowest adjusted win rates).
 
-avg_matches_per_entry
+avg_tournament_depth
 The average number of matches per tournament appearance, calculated as total_matches / count.
-Example: "avg_matches_per_entry: { min: 5.5 }" means the deck averaged at least 5.5 matches per tournament entry (indicating deeper runs on average).
+Example: "avg_tournament_depth: { min: 5.5 }" means the deck averaged at least 5.5 matches per tournament entry (indicating deeper runs on average).
 
-avg_matches_per_entry_pct
-The deck's percentile ranking based on avg_matches_per_entry (higher percentile = deeper tournament runs).
-Example: "avg_matches_per_entry_pct: { min: 90 }" means the deck is in at least the 90th percentile for average matches per entry (top 10% for tournament progression).
+avg_tournament_depth_pct
+The deck's percentile ranking based on avg_tournament_depth (higher percentile = deeper tournament runs).
+Example: "avg_tournament_depth_pct: { min: 90 }" means the deck is in at least the 90th percentile for average matches per entry (top 10% for tournament progression).
 
 meta_impact
 A score reflecting the deck's overall metagame influence, calculated as adjusted_win_rate × share.
