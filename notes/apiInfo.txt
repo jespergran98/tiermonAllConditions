@@ -1,0 +1,18 @@
+https://docs.limitlesstcg.com/developer/tournaments.html
+
+Key Endpoints for Your Use Case
+
+GET /tournaments?game=POCKET
+This lists recent tournaments (default: last 50, sorted by date descending). Optional params include limit (e.g., limit=100 for more results) and page for pagination. Each tournament object includes id, name, date, players, and more.
+
+To approximate a timeframe like "4w" (4 weeks), fetch tournaments and filter client-side by the date field (ISO format, e.g., "2025-10-01T00:00:00.000Z"). You could loop through pages until you hit tournaments older than your cutoff.
+
+GET /tournaments/{id}/standings
+For a specific tournament ID from the above, this returns player standings, including deck (with name and ID), record (wins, losses, ties), and full decklist (card details if submitted).
+
+Aggregate across multiple tournaments: Group by deck name to calculate total counts (entries), wins, losses, ties, and derived stats like win %. For example, sum records for each unique deck.
+
+GET /tournaments/{id}/pairings
+This gives match details (e.g., player1 vs. player2, winner). Combine with standings to analyze matchups and tournament depth for your Bayesian model.
+
+They also have webhooks for real-time updates on new/finished tournaments, which could automate your data pulls once set up.
