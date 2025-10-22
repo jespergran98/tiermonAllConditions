@@ -1383,157 +1383,172 @@ enrichedDecks.forEach(deck => {
 });
 
 // ============================================================================
-// STEP 4: CALCULATE RATING (HIERARCHICAL BAYESIAN ALGORITHM - HYBRID)
+// HIERARCHICAL BAYESIAN RANKING ALGORITHM (WIN RATE + SHARE HYBRID)
 // ============================================================================
 
-/**
- * Z-score for confidence interval calculation.
- * Higher values favor decks with many matches over decks with high win rates but few matches.
- * Lower values allow decks with fewer matches to rank higher based on their win rate.
- * Current value (3.5) is moderately conservative.
- */
-const RATING_Z_SCORE = 3.5;
+// Z-scores: 2.0 for win rate (95% CI), 1.5 for share (less volatile)
+const WIN_RATE_Z_SCORE = 2.0;
+const SHARE_Z_SCORE = 1.5;
 
-/**
- * Weight factor for combining win rate and share components.
- * 0.0 = purely share-based, 1.0 = purely win-rate based
- * Current value (0.7) heavily favors win rate while still considering popularity
- */
-const WIN_RATE_WEIGHT = 0.7;
+// Weighting: 75% performance, 25% popularity
+const WIN_RATE_WEIGHT = 0.75;
 const SHARE_WEIGHT = 1 - WIN_RATE_WEIGHT;
 
 /**
- * Calculates meta-level adjustment to prevent over-conservatism in small datasets.
- * Smaller metas receive tighter confidence bounds (lower effective z-scores) to enable
- * more decisive rankings despite limited data.
- * 
- * @param {number} totalDecks - Total number of decks in meta
- * @returns {number} Adjustment factor (0.8 for small metas, 1.0 for large metas)
+ * Meta adjustment prevents over-conservatism in small tournaments.
+ * Returns 0.7-1.0 based on deck count (reference: 50 decks = 1.0)
  */
 const getMetaAdjustmentFactor = (totalDecks) => {
-  const referenceSize = 100;
+  const referenceSize = 50;
   if (totalDecks >= referenceSize) return 1.0;
-  
-  const adjustment = 0.8 + (0.2 * totalDecks / referenceSize);
-  return Math.max(0.8, Math.min(adjustment, 1.0));
+  return Math.max(0.7, 0.7 + (0.3 * totalDecks / referenceSize));
 };
 
 /**
- * Hierarchical Bayesian ranking using both win rate AND share.
+ * Gradual penalty for low-share decks. Prevents outliers from dominating.
+ * - >5% share: No penalty (1.0x)
+ * - 2-5% share: Minimal penalty (0.95-1.0x)
+ * - 0.5-2% share: Moderate penalty (0.75-0.95x)
+ * - <0.5% share: Heavy penalty (0.5-0.75x)
+ * - <0.1% share: Severe penalty (<0.5x)
+ */
+const calculateSharePenalty = (share, totalDecks) => {
+  const wellRepresentedThreshold = 5.0;
+  if (share >= wellRepresentedThreshold) return 1.0;
+  
+  const uniformShare = 100 / totalDecks;
+  const minViableShare = Math.max(0.5, uniformShare * 0.5);
+  
+  if (share >= minViableShare) {
+    // Linear interpolation: minViable → wellRepresented
+    const t = (share - minViableShare) / (wellRepresentedThreshold - minViableShare);
+    return 0.75 + (0.25 * t);
+  } else {
+    // Exponential decay: 0 → minViable
+    const t = share / minViableShare;
+    return 0.25 + (0.5 * Math.pow(t, 2));
+  }
+};
+
+/**
+ * Hierarchical Bayesian ranking combining win rate and share.
  * 
- * Algorithm overview:
- * 1. Calculate Bayesian posterior for WIN RATE (performance)
- * 2. Calculate Bayesian posterior for SHARE (popularity/meta presence)
- * 3. Combine both metrics using weighted average
- * 4. Calculate conservative lower confidence bound
+ * Process:
+ * 1. Calculate Beta priors for win rate and share from meta statistics
+ * 2. Update priors with deck-specific data (Bayesian posteriors)
+ * 3. Compute lower confidence bounds (conservative estimates)
+ * 4. Combine metrics (75% WR, 25% share) and apply share penalty
  * 
- * This produces ratings that:
- * - Primarily reward high win rates (deck strength)
- * - Secondarily consider meta share (deck popularity)
- * - Regress extreme values toward meta mean when sample size is small
- * - Prevent statistical flukes from dominating rankings
- * 
- * @param {Array} allData - Array of [rank, name, wins, losses, ties, share, count]
- * @returns {Array} Deck statistics with Bayesian posterior estimates
+ * @param {Array} allData - [rank, name, wins, losses, ties, share%, count]
+ * @returns {Array} Deck statistics with Bayesian posteriors and ratings
  */
 const hierarchicalBayesianHybrid = (allData) => {
   const totalDecks = allData.length;
   const metaAdjustment = getMetaAdjustmentFactor(totalDecks);
   
   // ========================================================================
-  // PART 1: WIN RATE BAYESIAN CALCULATION
+  // PART 1: WIN RATE PRIORS (from meta statistics)
   // ========================================================================
   
-  // Calculate win rate statistics
   const winRateStats = allData.map(([_, __, wins, losses, ties]) => {
     const n = wins + losses + ties;
     const effectiveWins = wins + 0.5 * ties;
-    return { n, wins, losses, ties, winRate: effectiveWins / n };
+    return { n, wins, losses, ties, winRate: n > 0 ? effectiveWins / n : 0.5 };
   });
   
-  // Global win rate meta statistics
   const totalGames = winRateStats.reduce((sum, d) => sum + d.n, 0);
-  const weightedWinRateMean = winRateStats.reduce((sum, d) => 
-    sum + d.winRate * d.n, 0) / totalGames;
-  const winRateVariance = winRateStats.reduce((sum, d) => 
-    sum + Math.pow(d.winRate - weightedWinRateMean, 2), 0) / totalDecks;
+  const weightedWinRateMean = totalGames > 0 
+    ? winRateStats.reduce((sum, d) => sum + d.winRate * d.n, 0) / totalGames
+    : 0.5;
   
-  // Estimate Beta distribution parameters for win rate
+  const winRateVariance = totalDecks > 1
+    ? winRateStats.reduce((sum, d) => 
+        sum + Math.pow(d.winRate - weightedWinRateMean, 2), 0) / totalDecks
+    : 0.01;
+  
+  // Beta distribution parameters via method of moments
   const winRateMeanEst = Math.max(0.01, Math.min(0.99, weightedWinRateMean));
   const winRateMaxVar = winRateMeanEst * (1 - winRateMeanEst);
-  const winRateVarEst = Math.max(0.0001, Math.min(winRateVariance, winRateMaxVar * 0.85));
+  const winRateVarEst = Math.max(0.0001, Math.min(winRateVariance, winRateMaxVar * 0.9));
   
   const winRateScale = (winRateMeanEst * (1 - winRateMeanEst)) / winRateVarEst - 1;
   const priorAlphaWR = Math.max(0.5, winRateMeanEst * winRateScale);
   const priorBetaWR = Math.max(0.5, (1 - winRateMeanEst) * winRateScale);
   
   // ========================================================================
-  // PART 2: SHARE BAYESIAN CALCULATION
+  // PART 2: SHARE PRIORS (from meta statistics)
   // ========================================================================
   
-  // Calculate share statistics
-  const shareStats = allData.map(([_, __, ___, ____, _____, share, count]) => {
-    const proportion = share / 100;
-    return { proportion, count, share };
-  });
+  const shareStats = allData.map(([_, __, ___, ____, _____, share, count]) => ({
+    proportion: share / 100,
+    count,
+    share
+  }));
   
-  // Global share meta statistics
   const totalInstances = shareStats.reduce((sum, d) => sum + d.count, 0);
-  const weightedShareMean = shareStats.reduce((sum, d) => 
-    sum + d.proportion * d.count, 0) / totalInstances;
-  const shareVariance = shareStats.reduce((sum, d) => 
-    sum + Math.pow(d.proportion - weightedShareMean, 2) * d.count, 0) / totalInstances;
+  const weightedShareMean = totalInstances > 0
+    ? shareStats.reduce((sum, d) => sum + d.proportion * d.count, 0) / totalInstances
+    : 1 / totalDecks;
   
-  // Estimate Beta distribution parameters for share
+  const shareVariance = totalInstances > 0
+    ? shareStats.reduce((sum, d) => 
+        sum + Math.pow(d.proportion - weightedShareMean, 2) * d.count, 0) / totalInstances
+    : 0.001;
+  
+  // Beta distribution parameters via method of moments
   const shareMeanEst = Math.max(0.001, Math.min(0.999, weightedShareMean));
   const shareMaxVar = shareMeanEst * (1 - shareMeanEst);
-  const shareVarEst = Math.max(0.00001, Math.min(shareVariance, shareMaxVar * 0.85));
+  const shareVarEst = Math.max(0.00001, Math.min(shareVariance, shareMaxVar * 0.9));
   
   const shareScale = (shareMeanEst * (1 - shareMeanEst)) / shareVarEst - 1;
   const priorAlphaShare = Math.max(0.5, shareMeanEst * shareScale);
   const priorBetaShare = Math.max(0.5, (1 - shareMeanEst) * shareScale);
   
   // ========================================================================
-  // PART 3: CALCULATE POSTERIORS AND COMBINE
+  // PART 3: BAYESIAN POSTERIORS & COMBINED RATINGS
   // ========================================================================
   
   return allData.map(([origRank, deckName, wins, losses, ties, share, count]) => {
     const n = wins + losses + ties;
-    const adjustedZ = RATING_Z_SCORE * metaAdjustment;
+    const adjustedWRZ = WIN_RATE_Z_SCORE * metaAdjustment;
+    const adjustedShareZ = SHARE_Z_SCORE * metaAdjustment;
     
-    // --- WIN RATE POSTERIOR ---
+    // Win Rate Posterior (Beta distribution updated with game results)
     const postAlphaWR = priorAlphaWR + wins + 0.5 * ties;
     const postBetaWR = priorBetaWR + losses + 0.5 * ties;
+    
     const posteriorWinRate = postAlphaWR / (postAlphaWR + postBetaWR);
     const posteriorWinRateVar = (postAlphaWR * postBetaWR) / 
       ((postAlphaWR + postBetaWR) ** 2 * (postAlphaWR + postBetaWR + 1));
     const posteriorWinRateStd = Math.sqrt(posteriorWinRateVar);
-    const lowerBoundWR = Math.max(0, posteriorWinRate - adjustedZ * posteriorWinRateStd);
+    const lowerBoundWR = Math.max(0, posteriorWinRate - adjustedWRZ * posteriorWinRateStd);
     
-    // --- SHARE POSTERIOR ---
+    // Share Posterior (Beta distribution updated with deck counts)
     const proportion = share / 100;
     const postAlphaShare = priorAlphaShare + count * proportion;
     const postBetaShare = priorBetaShare + count * (1 - proportion);
+    
     const posteriorShare = postAlphaShare / (postAlphaShare + postBetaShare);
     const posteriorShareVar = (postAlphaShare * postBetaShare) / 
       ((postAlphaShare + postBetaShare) ** 2 * (postAlphaShare + postBetaShare + 1));
     const posteriorShareStd = Math.sqrt(posteriorShareVar);
-    const lowerBoundShare = Math.max(0, posteriorShare - adjustedZ * posteriorShareStd);
+    const lowerBoundShare = Math.max(0, posteriorShare - adjustedShareZ * posteriorShareStd);
     
-    // --- WEIGHTED COMBINATION ---
-    // Combine win rate and share using weights
+    // Combined Metric (weighted average of WR and share)
     const combinedPosteriorMean = 
       WIN_RATE_WEIGHT * posteriorWinRate + SHARE_WEIGHT * posteriorShare;
     const combinedLowerBound = 
       WIN_RATE_WEIGHT * lowerBoundWR + SHARE_WEIGHT * lowerBoundShare;
     
-    // Combined variance (assuming independence)
     const combinedVariance = 
       (WIN_RATE_WEIGHT ** 2) * posteriorWinRateVar + 
       (SHARE_WEIGHT ** 2) * posteriorShareVar;
     const combinedStdDev = Math.sqrt(combinedVariance);
     
-    const adjustedLowerBound = Math.min(0.99, Math.max(0, combinedLowerBound));
+    // Apply Share Penalty (gradual reduction for low-representation decks)
+    const sharePenalty = calculateSharePenalty(share, totalDecks);
+    const penalizedLowerBound = combinedLowerBound * sharePenalty;
+    const adjustedLowerBound = Math.min(0.99, Math.max(0, penalizedLowerBound));
     
     return { 
       origRank, 
@@ -1547,9 +1562,11 @@ const hierarchicalBayesianHybrid = (allData) => {
       posteriorMean: combinedPosteriorMean,
       posteriorStdDev: combinedStdDev,
       posteriorVariance: combinedVariance,
-      zScore: adjustedZ,
+      zScoreWR: adjustedWRZ,
+      zScoreShare: adjustedShareZ,
+      sharePenalty: sharePenalty,
       lowerBound: adjustedLowerBound,
-      // Additional breakdown for debugging
+      lowerBoundBeforePenalty: combinedLowerBound,
       posteriorWinRate,
       posteriorShare,
       lowerBoundWR,
@@ -1559,11 +1576,16 @@ const hierarchicalBayesianHybrid = (allData) => {
 };
 
 /**
- * Converts combined metric (0-1) to 0-180 strength scale.
+ * Converts 0-1 metric to 0-220 strength scale.
+ * Scale: 90 = average (50%), 108 = strong (60%), 126 = very strong (70%)
  */
-const calculateStrength = (metric) => metric * 230;
+const calculateStrength = (metric) => metric * 220;
 
-// Prepare data for hierarchical Bayesian calculation
+// ============================================================================
+// APPLY ALGORITHM TO DECK DATA
+// ============================================================================
+
+// Prepare input: [rank, name, wins, losses, ties, share%, count]
 const bayesianInput = enrichedDecks.map((deck, index) => [
   index + 1,
   deck.deck_name,
@@ -1576,22 +1598,23 @@ const bayesianInput = enrichedDecks.map((deck, index) => [
 
 const bayesianResults = hierarchicalBayesianHybrid(bayesianInput);
 
-// Apply Bayesian ratings to decks
+// Apply ratings to decks
 enrichedDecks.forEach((deck, index) => {
   const bayesianData = bayesianResults[index];
   
-  // Rating based on lower confidence bound of combined metric
-  // Primarily driven by win rate, secondarily by share
-  const ratingMetric = bayesianData.lowerBound;
-  deck.rating = calculateStrength(ratingMetric);
+  // Rating based on conservative lower bound with share penalty
+  deck.rating = calculateStrength(bayesianData.lowerBound);
   
   deck.bayesianDetails = {
     posteriorMean: bayesianData.posteriorMean,
     lowerBound: bayesianData.lowerBound,
-    zScore: bayesianData.zScore,
+    lowerBoundBeforePenalty: bayesianData.lowerBoundBeforePenalty,
+    sharePenalty: bayesianData.sharePenalty,
+    zScoreWinRate: bayesianData.zScoreWR,
+    zScoreShare: bayesianData.zScoreShare,
     sampleSize: bayesianData.n,
+    deckCount: bayesianData.count,
     posteriorStdDev: bayesianData.posteriorStdDev,
-    // Breakdown of components
     posteriorWinRate: bayesianData.posteriorWinRate,
     posteriorShare: bayesianData.posteriorShare,
     lowerBoundWinRate: bayesianData.lowerBoundWR,
