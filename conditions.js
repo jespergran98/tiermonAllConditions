@@ -1814,9 +1814,9 @@ enrichedDecks.slice(0, 10).forEach(deck => {
   console.log();
   console.log('META STATISTICS:');
   console.log(`  Share (percentage of meta): ${deck.share.toFixed(2)}% (rounded: ${deck.share_rounded}%)`);
-  console.log(`  Count Share (percentage of tournament entries): ${deck.tournament_share.toFixed(2)}%`);
+  console.log(`  Tournament Share (percentage of tournament entries): ${deck.tournament_share.toFixed(2)}%`);
   console.log(`  Share vs Most Played: ${deck.share_compared_to_most_played_deck.toFixed(2)}%`);
-  console.log(`  Meta Impact: ${deck.meta_impact.toFixed(2)}`);
+  console.log(`  Meta Impact (adjusted win rate * share): ${deck.meta_impact.toFixed(2)}`);
   console.log();
   console.log('RANKING & RATING:');
   console.log(`  Rank: #${deck.rank}`);
