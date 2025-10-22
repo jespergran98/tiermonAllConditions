@@ -314,7 +314,8 @@ const calculateDeckStatistics = (rawDecks) => {
     count_rounded: formatWithK(deck.count),
     total_matches_rounded: formatWithK(deck.total_matches),
     win_rate_rounded: Math.round(deck.win_rate),
-    share_rounded: Math.round(deck.share)
+    share_rounded: Math.round(deck.share),
+    rating_rounded: Math.round(deck.rating)
   }));
 };
 
@@ -350,7 +351,7 @@ enrichedDecks.slice(0, 10).forEach(deck => {
   console.log();
   console.log('RANKING & RATING:');
   console.log(`  Rank: #${deck.rank}`);
-  console.log(`  Rating: ${deck.rating.toFixed(2)}/100+`);
+  console.log(`  Rating: ${deck.rating.toFixed(2)}/100+ (rounded: ${deck.rating_rounded})`);
   console.log(`  Tier: ${deck.tier_display}`);
   console.log();
   console.log('PERCENTILES:');
@@ -379,7 +380,7 @@ const requiredConditions = [
   'rating', 'tier', 'tier_display', 'rank',
   'rating_pct', 'count_pct', 'total_matches_pct', 'win_rate_pct', 'adjusted_win_rate_pct',
   'avg_tournament_depth_pct', 'meta_impact_pct',
-  'count_rounded', 'total_matches_rounded', 'win_rate_rounded', 'share_rounded', 'tournament_share'
+  'count_rounded', 'total_matches_rounded', 'win_rate_rounded', 'share_rounded', 'rating_rounded', 'tournament_share'
 ];
 
 const firstDeck = enrichedDecks[0];

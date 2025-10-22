@@ -138,7 +138,7 @@ function createDeckCard(deck) {
     <div class="deck-stats">
       <div class="stat-item">
         <div class="stat-label">Rating</div>
-        <div class="stat-value">${deck.rating.toFixed(1)}</div>
+        <div class="stat-value">${deck.rating_rounded}</div>
       </div>
       <div class="stat-item">
         <div class="stat-label">Win Rate</div>
@@ -150,7 +150,7 @@ function createDeckCard(deck) {
       </div>
       <div class="stat-item">
         <div class="stat-label">Meta Impact</div>
-        <div class="stat-value">${deck.meta_impact.toFixed(1)}</div>
+        <div class="stat-value">${deck.meta_impact.toFixed(0)}</div>
       </div>
     </div>
     
