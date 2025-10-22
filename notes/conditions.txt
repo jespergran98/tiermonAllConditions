@@ -10,6 +10,10 @@ rating_pct
 Specifies the deck's percentile ranking based on its rating (higher percentile = higher rating).
 Example: "rating_pct: { min: 75 }" means the deck is in at least the 75th percentile by rating (top 25%).
 
+rating_rounded
+The deck's rating, rounded to the nearest whole number.
+The rounded rating is used on the tier list card
+
 rank
 The deck's position in the overall ranking, sorted by rating (lower rank number = better performance).
 Example: "rank: { min: 3 }" means the deck is ranked 3 or better (e.g., 1, 2, or 3).
