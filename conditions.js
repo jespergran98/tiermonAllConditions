@@ -3,20 +3,83 @@
  * DECK STATISTICS CALCULATOR
  * ============================================================================
  * 
- * This module calculates comprehensive statistics for tournament deck data,
- * including win rates, rankings, tiers, and meta impact using a hierarchical
- * Bayesian algorithm.
+ * Calculates comprehensive tournament deck statistics including win rates,
+ * rankings, tiers, and meta impact using hierarchical Bayesian analysis.
  * 
- * The calculation pipeline follows these steps:
- * 1. Calculate basic metrics (win rates, matches)
- * 2. Calculate share metrics (usage percentages)
- * 3. Calculate meta impact
- * 4. Calculate Bayesian ratings
- * 5. Assign tiers based on ratings
- * 6. Calculate rankings
- * 7. Calculate percentiles for all metrics
- * 8. Calculate rounded values for display
+ * Pipeline: Basic Metrics → Share Metrics → Meta Impact → Bayesian Ratings
+ *           → Tiers → Rankings → Percentiles → Display Formatting
  */
+
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+const CONFIG = {
+  bayesian: {
+    // WIN RATE Z-SCORE (Conservative Estimation)
+    // Controls how conservative the win rate estimates are
+    // • Higher values (2.5+) = More conservative, harder for decks to rank high
+    // • Lower values (1.0-1.5) = Less conservative, ratings reflect raw performance more
+    // • 2.0 = 95% confidence interval (standard choice)
+    // Effect: A deck with 55% win rate and small sample will be rated lower with higher z-scores
+    winRateZScore: 2.0,
+    
+    // SHARE Z-SCORE (Popularity Conservative Estimation)
+    // Controls how conservative the popularity estimates are
+    // • Higher values = Punishes low-sample decks more severely
+    // • Lower values = Gives benefit of doubt to newer/less played decks
+    // • 1.5 = ~87% confidence interval (slightly less conservative than win rate)
+    // Effect: Determines how quickly a deck can rise in rankings as it gains play
+    shareZScore: 1.5,
+    
+    // WIN RATE WEIGHT (Performance vs Popularity Balance)
+    // Determines the importance of performance vs popularity in final ratings
+    // • 1.0 = Pure performance-based (ignores popularity entirely)
+    // • 0.5 = Equal weight to performance and popularity
+    // • 0.9 = Heavily favors performance, but popularity still matters
+    // Effect: With 0.9, a deck with 60% WR and 1% share beats a 52% WR with 30% share
+    //         With 0.5, the popular deck would rank higher despite lower win rate
+    winRateWeight: 0.9,
+    shareWeight: 0.1,  // Must sum to 1.0 with winRateWeight
+    
+    // META ADJUSTMENT K (Dataset Size Sensitivity)
+    // Controls how z-scores scale with total dataset size
+    // • Higher values (300+) = Takes longer to reach full confidence, more conservative overall
+    // • Lower values (50-100) = Quickly reaches full confidence, less conservative
+    // • 150 = Balanced, reaches ~63% of full confidence at 150 total deck instances
+    // Effect: At 50 instances with k=150, z-scores are reduced by ~28% (less conservative)
+    //         At 500 instances, z-scores are at ~97% strength (nearly full conservative)
+    // Formula: adjustment = 1 - e^(-totalInstances/k)
+    metaAdjustmentK: 150,
+    
+    // SHARE PENALTY K (Low Popularity Dampening)
+    // Exponentially reduces ratings for decks with very low play rates
+    // • Higher values (3.0+) = Less penalty, even rare decks can rank high if they perform well
+    // • Lower values (1.0-1.5) = Severe penalty, only popular decks can rank high
+    // • 2.2 = Balanced, allows strong niche decks to appear but prevents outliers
+    // Effect: At 0.5% share with k=2.2, rating is multiplied by ~0.67 (33% penalty)
+    //         At 5% share, penalty is only ~0.01 (essentially no penalty)
+    //         At 0.01% share, penalty is ~0.02 (98% penalty - almost eliminates rating)
+    // Formula: penalty = 1 - e^(-k * share)
+    sharePenaltyK: 2.2
+
+  },
+  tiers: {
+    X: 100,        // Exceptional
+    Splus: 95,     // Elite+
+    S: 90,         // Elite
+    A: 85,         // Excellent
+    B: 78,         // Good
+    C: 71,         // Above Average
+    D: 64,         // Average
+    E: 57,         // Below Average
+    F: 50          // Poor
+  },
+  tierDisplay: {
+    'Splus': 'S+', 'X': 'X', 'S': 'S', 'A': 'A', 'B': 'B',
+    'C': 'C', 'D': 'D', 'E': 'E', 'F': 'F', 'Unranked': 'Unranked'
+  }
+};
 
 // ============================================================================
 // RAW DATA
@@ -1260,567 +1323,268 @@ const decks = [
   { deck_name: "Lanturn ex Raikou ex", count: 1, wins: 0, losses: 1, ties: 0 }
 ];
 
-
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Calculate percentile ranking for a value within an array
- * 
- * @param {number} value - The value to rank
- * @param {number[]} sortedArray - Array sorted in ascending order
- * @returns {number} Percentile from 0-100 (higher = better relative position)
- * 
- * @example
- * calculatePercentile(75, [50, 60, 70, 80, 90]) // Returns 50 (middle of pack)
- * calculatePercentile(95, [50, 60, 70, 80, 90]) // Returns 100 (best in group)
- */
-function calculatePercentile(value, sortedArray) {
+const calculatePercentile = (value, sortedArray) => {
   const rank = sortedArray.filter(v => v < value).length;
   return (rank / (sortedArray.length - 1)) * 100;
-}
+};
 
-/**
- * Format a number with "k" notation for thousands
- * 
- * @param {number} num - Number to format
- * @returns {string} Formatted string with "k" for thousands
- * 
- * @example
- * formatWithK(500) // Returns "500"
- * formatWithK(1500) // Returns "1.5k"
- * formatWithK(4800) // Returns "4.8k"
- * formatWithK(5743) // Returns "5k+"
- * formatWithK(13765) // Returns "13k+"
- */
-function formatWithK(num) {
-  if (num < 1000) {
-    return num.toString();
-  }
-  
-  const thousands = num / 1000;
-  
-  // Round to appropriate decimal places based on magnitude
-  if (thousands >= 5) {
-    // 5k+ - round down and add "+" suffix
-    return Math.floor(thousands) + 'k+';
-  } else {
-    // 1k-4.9k - one decimal place if not a whole number
-    const rounded = Math.round(thousands * 10) / 10;
-    return (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)) + 'k';
-  }
-}
+const formatWithK = (num) => {
+  if (num < 1000) return num.toString();
+  const k = num / 1000;
+  if (k >= 5) return Math.floor(k) + 'k+';
+  const rounded = Math.round(k * 10) / 10;
+  return (rounded % 1 === 0 ? rounded.toFixed(0) : rounded.toFixed(1)) + 'k';
+};
+
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 // ============================================================================
-// STEP 1: CALCULATE BASIC METRICS
+// BAYESIAN ALGORITHM
 // ============================================================================
 
-const enrichedDecks = decks.map(deck => {
-  // TOTAL MATCHES
-  // Sum of all game outcomes for this deck
-  const total_matches = deck.wins + deck.losses + deck.ties;
-  
-  // WIN RATE
-  // Standard win percentage: wins divided by total matches
-  // Does not account for ties
-  const win_rate = (deck.wins / total_matches) * 100;
-  
-  // ADJUSTED WIN RATE
-  // Treats ties as half-wins for a more nuanced performance measure
-  // Formula: (wins + 0.5 * ties) / total_matches * 100
-  const adjusted_win_rate = ((deck.wins + 0.5 * deck.ties) / total_matches) * 100;
-  
-  // AVERAGE TOURNAMENT DEPTH
-  // Indicates tournament depth - higher values mean the deck progresses further
-  // Formula: total_matches / count
-  const avg_tournament_depth = total_matches / deck.count;
+const getMetaAdjustmentFactor = (totalInstances) => {
+  return 1 - Math.exp(-totalInstances / CONFIG.bayesian.metaAdjustmentK);
+};
+
+const calculateSharePenalty = (share) => {
+  return 1 - Math.exp(-CONFIG.bayesian.sharePenaltyK * share);
+};
+
+const calculateBetaParams = (mean, variance) => {
+  const clampedMean = clamp(mean, 0.001, 0.999);
+  const maxVar = clampedMean * (1 - clampedMean);
+  const clampedVar = clamp(variance, 0.00001, maxVar * 0.9);
+  const scale = (clampedMean * (1 - clampedMean)) / clampedVar - 1;
   
   return {
-    ...deck,
-    total_matches,
-    win_rate,
-    adjusted_win_rate,
-    avg_tournament_depth
+    alpha: Math.max(0.5, clampedMean * scale),
+    beta: Math.max(0.5, (1 - clampedMean) * scale)
   };
-});
-
-// ============================================================================
-// STEP 2: CALCULATE SHARE METRICS
-// ============================================================================
-
-// Calculate total count across all decks for percentage calculations
-const totalCount = enrichedDecks.reduce((sum, deck) => sum + deck.count, 0);
-
-// Find the most played deck's count for relative comparisons
-const mostPlayedDeckCount = Math.max(...enrichedDecks.map(d => d.count));
-
-enrichedDecks.forEach(deck => {
-  // SHARE
-  // Deck's percentage of total tournament entries
-  // Formula: (count / totalCount) * 100
-  // Example: If deck has 500 entries out of 5000 total, share = 10%
-  deck.share = (deck.count / totalCount) * 100;
-  
-  // SHARE COMPARED TO MOST PLAYED DECK
-  // Relative popularity compared to the #1 most played deck
-  // Formula: (deck.share / most_played_share) * 100
-  // Example: If deck has 5% share and top deck has 20%, result = 25%
-  const mostPlayedShare = (mostPlayedDeckCount / totalCount) * 100;
-  deck.share_compared_to_most_played_deck = (deck.share / mostPlayedShare) * 100;
-});
-
-// ============================================================================
-// STEP 3: CALCULATE META IMPACT
-// ============================================================================
-
-enrichedDecks.forEach(deck => {
-  // META IMPACT
-  // Measures overall influence on the metagame
-  // Formula: adjusted_win_rate * share
-  // High values indicate decks that are both popular AND successful
-  // Low values indicate niche or underperforming decks
-  deck.meta_impact = deck.adjusted_win_rate * deck.share;
-});
-
-// ============================================================================
-// STEP 4: HIERARCHICAL BAYESIAN RANKING ALGORITHM (WIN RATE + SHARE HYBRID)
-// ============================================================================
-
-// Z-scores: 2.0 for win rate (95% CI), 1.5 for share
-const WIN_RATE_Z_SCORE = 2.0;
-const SHARE_Z_SCORE = 1.5;
-
-// Weighting: 90% performance, 10% popularity
-const WIN_RATE_WEIGHT = 0.9;
-const SHARE_WEIGHT = 1 - WIN_RATE_WEIGHT;
-
-/**
- * Meta adjustment prevents over-conservatism in small datasets.
- * Exponential decay: heavy impact for small total instances, asymptotic to 1.0 at large scale.
- * Adjusted to use totalInstances (total deck counts) for better representation of dataset size.
- */
-const getMetaAdjustmentFactor = (totalInstances) => {
-  // Exponential approach to 1.0: 1 - e^(-totalInstances/k)
-  // k controls curve steepness (larger k = slower approach to 1.0)
-  const k = 150; // Retained; tune based on desired curve if needed
-  return 1 - Math.exp(-totalInstances / k);
 };
 
-/**
- * Exponential penalty for low-share decks. Prevents outliers from dominating.
- * Uses an exponential curve: 1 - exp(-k * share), where k=2.2 for tuning.
- * - Approaches 1.0 for high shares (>5%: barely affected, e.g., 0.993 at 5%)
- * - Gradually decreases for lower shares, severely penalizing very low shares (e.g., 0.01 at 0.01%)
- * Scales continuously from 0% to 100%, with stronger impact on low percentages.
- */
-const calculateSharePenalty = (share) => {
-  const k = 2.2; // Higher number means less played decks still have a chance to appear on the top of the leaderboard
-  return 1 - Math.exp(-k * share);
-};
-
-/**
- * Hierarchical Bayesian ranking combining win rate and share.
- * 
- * Process:
- * 1. Calculate Beta priors for win rate and share from meta statistics
- * 2. Update priors with deck-specific data (Bayesian posteriors)
- * 3. Compute lower confidence bounds (conservative estimates)
- * 4. Combine metrics (90% WR, 10% share) and apply share penalty
- * 
- * Fixes:
- * - Use totalInstances for meta adjustment (dataset size).
- * - Use unweighted mean and variance for share priors (consistent with hierarchical assumption).
- * - Correct share posterior update to standard binomial: +count for alpha, +(totalInstances - count) for beta.
- * 
- * @param {Array} allData - [rank, name, wins, losses, ties, share%, count]
- * @returns {Array} Deck statistics with Bayesian posteriors and ratings
- */
 const hierarchicalBayesianHybrid = (allData) => {
-  const totalUniqueDecks = allData.length;
-  const totalInstances = allData.reduce((sum, [,,,,,,count]) => sum + count, 0);
+  const totalDecks = allData.length;
+  const totalInstances = allData.reduce((sum, d) => sum + d.count, 0);
   const metaAdjustment = getMetaAdjustmentFactor(totalInstances);
   
-  // ========================================================================
-  // PART 1: WIN RATE PRIORS (from meta statistics)
-  // ========================================================================
+  // Calculate win rate priors
+  const totalGames = allData.reduce((sum, d) => sum + d.total_matches, 0);
+  const weightedWinRateMean = allData.reduce((sum, d) => 
+    sum + d.adjusted_win_rate_raw * d.total_matches, 0) / totalGames;
+  const winRateVariance = allData.reduce((sum, d) => 
+    sum + Math.pow(d.adjusted_win_rate_raw - weightedWinRateMean, 2), 0) / totalDecks;
+  const winRatePrior = calculateBetaParams(weightedWinRateMean, winRateVariance);
   
-  const winRateStats = allData.map(([_, __, wins, losses, ties]) => {
-    const n = wins + losses + ties;
-    const effectiveWins = wins + 0.5 * ties;
-    return { n, wins, losses, ties, winRate: n > 0 ? effectiveWins / n : 0.5 };
-  });
+  // Calculate share priors
+  const unweightedShareMean = allData.reduce((sum, d) => 
+    sum + d.share_raw, 0) / totalDecks;
+  const shareVariance = allData.reduce((sum, d) => 
+    sum + Math.pow(d.share_raw - unweightedShareMean, 2), 0) / totalDecks;
+  const sharePrior = calculateBetaParams(unweightedShareMean, shareVariance);
   
-  const totalGames = winRateStats.reduce((sum, d) => sum + d.n, 0);
-  const weightedWinRateMean = totalGames > 0 
-    ? winRateStats.reduce((sum, d) => sum + d.winRate * d.n, 0) / totalGames
-    : 0.5;
-  
-  const winRateVariance = totalUniqueDecks > 1
-    ? winRateStats.reduce((sum, d) => 
-        sum + Math.pow(d.winRate - weightedWinRateMean, 2), 0) / totalUniqueDecks
-    : 0.01;
-  
-  // Beta distribution parameters via method of moments
-  const winRateMeanEst = Math.max(0.01, Math.min(0.99, weightedWinRateMean));
-  const winRateMaxVar = winRateMeanEst * (1 - winRateMeanEst);
-  const winRateVarEst = Math.max(0.0001, Math.min(winRateVariance, winRateMaxVar * 0.9));
-  
-  const winRateScale = (winRateMeanEst * (1 - winRateMeanEst)) / winRateVarEst - 1;
-  const priorAlphaWR = Math.max(0.5, winRateMeanEst * winRateScale);
-  const priorBetaWR = Math.max(0.5, (1 - winRateMeanEst) * winRateScale);
-  
-  // ========================================================================
-  // PART 2: SHARE PRIORS (from meta statistics)
-  // ========================================================================
-  
-  const shareStats = allData.map(([_, __, ___, ____, _____, share, count]) => ({
-    proportion: share / 100,
-    count,
-    share
-  }));
-  
-  const unweightedShareMean = totalUniqueDecks > 0
-    ? shareStats.reduce((sum, d) => sum + d.proportion, 0) / totalUniqueDecks
-    : 1 / totalUniqueDecks;
-  
-  const shareVariance = totalUniqueDecks > 1
-    ? shareStats.reduce((sum, d) => 
-        sum + Math.pow(d.proportion - unweightedShareMean, 2), 0) / totalUniqueDecks
-    : 0.001;
-  
-  // Beta distribution parameters via method of moments
-  const shareMeanEst = Math.max(0.001, Math.min(0.999, unweightedShareMean));
-  const shareMaxVar = shareMeanEst * (1 - shareMeanEst);
-  const shareVarEst = Math.max(0.00001, Math.min(shareVariance, shareMaxVar * 0.9));
-  
-  const shareScale = (shareMeanEst * (1 - shareMeanEst)) / shareVarEst - 1;
-  const priorAlphaShare = Math.max(0.5, shareMeanEst * shareScale);
-  const priorBetaShare = Math.max(0.5, (1 - shareMeanEst) * shareScale);
-  
-  // ========================================================================
-  // PART 3: BAYESIAN POSTERIORS & COMBINED RATINGS
-  // ========================================================================
-  
-  return allData.map(([origRank, deckName, wins, losses, ties, share, count]) => {
-    const n = wins + losses + ties;
-    const adjustedWRZ = WIN_RATE_Z_SCORE * metaAdjustment;
-    const adjustedShareZ = SHARE_Z_SCORE * metaAdjustment;
+  // Calculate posteriors for each deck
+  return allData.map(deck => {
+    const adjustedWRZ = CONFIG.bayesian.winRateZScore * metaAdjustment;
+    const adjustedShareZ = CONFIG.bayesian.shareZScore * metaAdjustment;
     
-    // Win Rate Posterior (Beta distribution updated with game results)
-    const postAlphaWR = priorAlphaWR + wins + 0.5 * ties;
-    const postBetaWR = priorBetaWR + losses + 0.5 * ties;
-    
+    // Win rate posterior
+    const postAlphaWR = winRatePrior.alpha + deck.wins + 0.5 * deck.ties;
+    const postBetaWR = winRatePrior.beta + deck.losses + 0.5 * deck.ties;
     const posteriorWinRate = postAlphaWR / (postAlphaWR + postBetaWR);
     const posteriorWinRateVar = (postAlphaWR * postBetaWR) / 
       ((postAlphaWR + postBetaWR) ** 2 * (postAlphaWR + postBetaWR + 1));
-    const posteriorWinRateStd = Math.sqrt(posteriorWinRateVar);
-    const lowerBoundWR = Math.max(0, posteriorWinRate - adjustedWRZ * posteriorWinRateStd);
+    const lowerBoundWR = Math.max(0, posteriorWinRate - 
+      adjustedWRZ * Math.sqrt(posteriorWinRateVar));
     
-    // Share Posterior (Beta distribution updated with deck counts)
-    const postAlphaShare = priorAlphaShare + count;
-    const postBetaShare = priorBetaShare + (totalInstances - count);
-    
+    // Share posterior
+    const postAlphaShare = sharePrior.alpha + deck.count;
+    const postBetaShare = sharePrior.beta + (totalInstances - deck.count);
     const posteriorShare = postAlphaShare / (postAlphaShare + postBetaShare);
     const posteriorShareVar = (postAlphaShare * postBetaShare) / 
       ((postAlphaShare + postBetaShare) ** 2 * (postAlphaShare + postBetaShare + 1));
-    const posteriorShareStd = Math.sqrt(posteriorShareVar);
-    const lowerBoundShare = Math.max(0, posteriorShare - adjustedShareZ * posteriorShareStd);
+    const lowerBoundShare = Math.max(0, posteriorShare - 
+      adjustedShareZ * Math.sqrt(posteriorShareVar));
     
-    // Combined Metric (weighted average of WR and share)
-    const combinedPosteriorMean = 
-      WIN_RATE_WEIGHT * posteriorWinRate + SHARE_WEIGHT * posteriorShare;
-    const combinedLowerBound = 
-      WIN_RATE_WEIGHT * lowerBoundWR + SHARE_WEIGHT * lowerBoundShare;
+    // Combined metric
+    const { winRateWeight: wr, shareWeight: sr } = CONFIG.bayesian;
+    const combinedLowerBound = wr * lowerBoundWR + sr * lowerBoundShare;
+    const combinedVariance = (wr ** 2) * posteriorWinRateVar + (sr ** 2) * posteriorShareVar;
     
-    const combinedVariance = 
-      (WIN_RATE_WEIGHT ** 2) * posteriorWinRateVar + 
-      (SHARE_WEIGHT ** 2) * posteriorShareVar;
-    const combinedStdDev = Math.sqrt(combinedVariance);
+    // Apply share penalty
+    const sharePenalty = calculateSharePenalty(deck.share);
+    const lowerBound = clamp(combinedLowerBound * sharePenalty, 0, 0.99);
     
-    // Apply Share Penalty (gradual reduction for low-representation decks)
-    const sharePenalty = calculateSharePenalty(share);
-    const penalizedLowerBound = combinedLowerBound * sharePenalty;
-    const adjustedLowerBound = Math.min(0.99, Math.max(0, penalizedLowerBound));
-    
-    return { 
-      origRank, 
-      deckName, 
-      wins, 
-      losses, 
-      ties, 
-      share,
-      count,
-      n,
-      posteriorMean: combinedPosteriorMean,
-      posteriorStdDev: combinedStdDev,
-      posteriorVariance: combinedVariance,
-      zScoreWR: adjustedWRZ,
-      zScoreShare: adjustedShareZ,
-      sharePenalty: sharePenalty,
-      lowerBound: adjustedLowerBound,
-      lowerBoundBeforePenalty: combinedLowerBound,
-      posteriorWinRate,
-      posteriorShare,
-      lowerBoundWR,
-      lowerBoundShare
+    return {
+      ...deck,
+      rating: lowerBound * 195,
+      bayesianDetails: {
+        posteriorMean: wr * posteriorWinRate + sr * posteriorShare,
+        lowerBound,
+        lowerBoundBeforePenalty: combinedLowerBound,
+        sharePenalty,
+        zScoreWinRate: adjustedWRZ,
+        zScoreShare: adjustedShareZ,
+        sampleSize: deck.total_matches,
+        deckCount: deck.count,
+        posteriorStdDev: Math.sqrt(combinedVariance),
+        posteriorWinRate,
+        posteriorShare,
+        lowerBoundWinRate: lowerBoundWR,
+        lowerBoundShare: lowerBoundShare,
+        winRateWeight: wr,
+        shareWeight: sr
+      }
     };
   });
 };
 
-/**
- * Converts 0-1 metric to 0-195 strength scale. (decks rarely exceed 100)
- */
-const calculateStrength = (metric) => metric * 195;
-
 // ============================================================================
-// APPLY ALGORITHM TO DECK DATA
+// TIER ASSIGNMENT
 // ============================================================================
 
-// Prepare input: [rank, name, wins, losses, ties, share%, count]
-const bayesianInput = enrichedDecks.map((deck, index) => [
-  index + 1,
-  deck.deck_name,
-  deck.wins,
-  deck.losses,
-  deck.ties,
-  deck.share,
-  deck.count
-]);
-
-const bayesianResults = hierarchicalBayesianHybrid(bayesianInput);
-
-// Apply ratings to decks
-enrichedDecks.forEach((deck, index) => {
-  const bayesianData = bayesianResults[index];
-  
-  // Rating based on conservative lower bound with share penalty
-  deck.rating = calculateStrength(bayesianData.lowerBound);
-  
-  deck.bayesianDetails = {
-    posteriorMean: bayesianData.posteriorMean,
-    lowerBound: bayesianData.lowerBound,
-    lowerBoundBeforePenalty: bayesianData.lowerBoundBeforePenalty,
-    sharePenalty: bayesianData.sharePenalty,
-    zScoreWinRate: bayesianData.zScoreWR,
-    zScoreShare: bayesianData.zScoreShare,
-    sampleSize: bayesianData.n,
-    deckCount: bayesianData.count,
-    posteriorStdDev: bayesianData.posteriorStdDev,
-    posteriorWinRate: bayesianData.posteriorWinRate,
-    posteriorShare: bayesianData.posteriorShare,
-    lowerBoundWinRate: bayesianData.lowerBoundWR,
-    lowerBoundShare: bayesianData.lowerBoundShare,
-    winRateWeight: WIN_RATE_WEIGHT,
-    shareWeight: SHARE_WEIGHT
-  };
-});
-
-// ============================================================================
-// STEP 5: ASSIGN TIERS BASED ON RATING
-// ============================================================================
-
-// Tier display mapping - maps internal names to display text
-const tier_display_map = {
-  'Splus': 'S+',
-  'X': 'X',
-  'S': 'S',
-  'A': 'A',
-  'B': 'B',
-  'C': 'C',
-  'D': 'D',
-  'E': 'E',
-  'F': 'F',
-  'Unranked': 'Unranked'
+const assignTier = (rating) => {
+  for (const [tier, threshold] of Object.entries(CONFIG.tiers)) {
+    if (rating >= threshold) return tier;
+  }
+  return 'Unranked';
 };
 
-enrichedDecks.forEach(deck => {
-  // TIER ASSIGNMENT
-  // Tiers are assigned based on rating thresholds
-  // Higher tiers indicate stronger competitive performance
-  if (deck.rating >= 100) {
-    deck.tier = 'X';          // Exceptional
-  } else if (deck.rating >= 95) {
-    deck.tier = 'Splus';      // Elite+
-  } else if (deck.rating >= 90) {
-    deck.tier = 'S';          // Elite
-  } else if (deck.rating >= 85) {
-    deck.tier = 'A';          // Excellent
-  } else if (deck.rating >= 78) {
-    deck.tier = 'B';          // Good
-  } else if (deck.rating >= 71) {
-    deck.tier = 'C';          // Above Average
-  } else if (deck.rating >= 64) {
-    deck.tier = 'D';          // Average
-  } else if (deck.rating >= 57) {
-    deck.tier = 'E';          // Below Average
-  } else if (deck.rating >= 50) {
-    deck.tier = 'F';          // Poor
-  } else {
-    deck.tier = 'Unranked';   // Very Poor
-  }
-  
-  // Add display text for UI rendering
-  deck.tier_display = tier_display_map[deck.tier];
-});
-
 // ============================================================================
-// STEP 6: CALCULATE RANKINGS
+// MAIN CALCULATION PIPELINE
 // ============================================================================
 
-// Sort decks by rating in descending order to determine rank positions
-const decksByRating = [...enrichedDecks].sort((a, b) => b.rating - a.rating);
-
-decksByRating.forEach((deck, index) => {
-  // RANK
-  // Position in overall rankings (1 = best, 2 = second best, etc.)
-  // Based solely on rating (not win rate or popularity)
-  deck.rank = index + 1;
-});
-
-// ============================================================================
-// STEP 7: CALCULATE ALL PERCENTILES
-// ============================================================================
-
-// Prepare sorted arrays for percentile calculations
-// All arrays sorted in ASCENDING order (lowest to highest)
-const sortedRatings = enrichedDecks.map(d => d.rating).sort((a, b) => a - b);
-const sortedCounts = enrichedDecks.map(d => d.count).sort((a, b) => a - b);
-const sortedTotalMatches = enrichedDecks.map(d => d.total_matches).sort((a, b) => a - b);
-const sortedWinRates = enrichedDecks.map(d => d.win_rate).sort((a, b) => a - b);
-const sortedAdjustedWinRates = enrichedDecks.map(d => d.adjusted_win_rate).sort((a, b) => a - b);
-const sortedAvgMatches = enrichedDecks.map(d => d.avg_tournament_depth).sort((a, b) => a - b);
-const sortedMetaImpact = enrichedDecks.map(d => d.meta_impact).sort((a, b) => a - b);
-const sortedRanks = enrichedDecks.map(d => d.rank).sort((a, b) => a - b);
-
-enrichedDecks.forEach(deck => {
-  // RATING PERCENTILE
-  // Higher rating = higher percentile
-  // 90th percentile means deck is better than 90% of all decks
-  deck.rating_pct = calculatePercentile(deck.rating, sortedRatings);
+const calculateDeckStatistics = (rawDecks) => {
+  // Step 1: Calculate basic metrics
+  const withBasics = rawDecks.map(deck => {
+    const total_matches = deck.wins + deck.losses + deck.ties;
+    return {
+      ...deck,
+      total_matches,
+      win_rate: (deck.wins / total_matches) * 100,
+      adjusted_win_rate: ((deck.wins + 0.5 * deck.ties) / total_matches) * 100,
+      adjusted_win_rate_raw: (deck.wins + 0.5 * deck.ties) / total_matches,
+      avg_tournament_depth: total_matches / deck.count
+    };
+  });
   
-  // COUNT PERCENTILE
-  // Higher count = higher percentile
-  // Measures relative popularity
-  deck.count_pct = calculatePercentile(deck.count, sortedCounts);
+  // Step 2: Calculate share metrics
+  const totalCount = withBasics.reduce((sum, d) => sum + d.count, 0);
+  const mostPlayedCount = Math.max(...withBasics.map(d => d.count));
+  const mostPlayedShare = (mostPlayedCount / totalCount) * 100;
   
-  // TOTAL MATCHES PERCENTILE
-  // Higher total matches = higher percentile
-  // Indicates how much the deck has been played overall
-  deck.total_matches_pct = calculatePercentile(deck.total_matches, sortedTotalMatches);
+  const withShares = withBasics.map(deck => ({
+    ...deck,
+    share: (deck.count / totalCount) * 100,
+    share_raw: deck.count / totalCount,
+    share_compared_to_most_played_deck: ((deck.count / totalCount) * 100) / mostPlayedShare * 100
+  }));
   
-  // WIN RATE PERCENTILE
-  // Higher win rate = higher percentile
-  // Raw performance metric without sample size consideration
-  deck.win_rate_pct = calculatePercentile(deck.win_rate, sortedWinRates);
+  // Step 3: Calculate meta impact and apply Bayesian analysis
+  const withBayesian = hierarchicalBayesianHybrid(withShares.map(deck => ({
+    ...deck,
+    meta_impact: deck.adjusted_win_rate * deck.share
+  })));
   
-  // ADJUSTED WIN RATE PERCENTILE
-  // Higher adjusted win rate = higher percentile
-  // Performance metric that treats ties as half-wins
-  deck.adjusted_win_rate_pct = calculatePercentile(deck.adjusted_win_rate, sortedAdjustedWinRates);
+  // Step 4: Assign tiers
+  const withTiers = withBayesian.map(deck => ({
+    ...deck,
+    tier: assignTier(deck.rating),
+    tier_display: CONFIG.tierDisplay[assignTier(deck.rating)]
+  }));
   
-  // AVERAGE TOURNAMENT DEPTH PERCENTILE
-  // Higher average = higher percentile
-  // Indicates tournament depth/success per entry
-  deck.avg_tournament_depth_pct = calculatePercentile(deck.avg_tournament_depth, sortedAvgMatches);
+  // Step 5: Calculate rankings
+  const sorted = [...withTiers].sort((a, b) => b.rating - a.rating);
+  sorted.forEach((deck, i) => deck.rank = i + 1);
   
-  // META IMPACT PERCENTILE
-  // Higher meta impact = higher percentile
-  // Measures overall influence on competitive environment
-  deck.meta_impact_pct = calculatePercentile(deck.meta_impact, sortedMetaImpact);
-});
-
-// ============================================================================
-// STEP 8: CALCULATE ROUNDED VALUES
-// ============================================================================
-
-enrichedDecks.forEach(deck => {
-  // COUNT ROUNDED
-  // Formatted with "k" notation for thousands (e.g., "13k" instead of "13376")
-  deck.count_rounded = formatWithK(deck.count);
+  // Step 6: Calculate percentiles
+  const metrics = {
+    rating: sorted.map(d => d.rating).sort((a, b) => a - b),
+    count: sorted.map(d => d.count).sort((a, b) => a - b),
+    total_matches: sorted.map(d => d.total_matches).sort((a, b) => a - b),
+    win_rate: sorted.map(d => d.win_rate).sort((a, b) => a - b),
+    adjusted_win_rate: sorted.map(d => d.adjusted_win_rate).sort((a, b) => a - b),
+    avg_tournament_depth: sorted.map(d => d.avg_tournament_depth).sort((a, b) => a - b),
+    meta_impact: sorted.map(d => d.meta_impact).sort((a, b) => a - b)
+  };
   
-  // TOTAL MATCHES ROUNDED
-  // Formatted with "k" notation for thousands
-  deck.total_matches_rounded = formatWithK(deck.total_matches);
+  const withPercentiles = sorted.map(deck => ({
+    ...deck,
+    rating_pct: calculatePercentile(deck.rating, metrics.rating),
+    count_pct: calculatePercentile(deck.count, metrics.count),
+    total_matches_pct: calculatePercentile(deck.total_matches, metrics.total_matches),
+    win_rate_pct: calculatePercentile(deck.win_rate, metrics.win_rate),
+    adjusted_win_rate_pct: calculatePercentile(deck.adjusted_win_rate, metrics.adjusted_win_rate),
+    avg_tournament_depth_pct: calculatePercentile(deck.avg_tournament_depth, metrics.avg_tournament_depth),
+    meta_impact_pct: calculatePercentile(deck.meta_impact, metrics.meta_impact)
+  }));
   
-  // WIN RATE ROUNDED
-  // Rounded to nearest whole percentage for display
-  // Example: 52.7% becomes 53%
-  deck.win_rate_rounded = Math.round(deck.win_rate);
-  
-  // SHARE ROUNDED
-  // Rounded to nearest whole percentage for display
-  // Example: 7.3% becomes 7%
-  deck.share_rounded = Math.round(deck.share);
-});
+  // Step 7: Add display formatting
+  return withPercentiles.map(deck => ({
+    ...deck,
+    count_rounded: formatWithK(deck.count),
+    total_matches_rounded: formatWithK(deck.total_matches),
+    win_rate_rounded: Math.round(deck.win_rate),
+    share_rounded: Math.round(deck.share)
+  }));
+};
 
 // ============================================================================
-// OUTPUT RESULTS - TOP 10 DECKS
+// EXECUTION & OUTPUT
 // ============================================================================
+
+const enrichedDecks = calculateDeckStatistics(decks);
 
 console.log('='.repeat(80));
 console.log('DECK STATISTICS ANALYSIS - TOP 10 DECKS BY RATING');
 console.log('='.repeat(80));
 console.log();
 
-// Sort by rank and take only top 10 decks for display
-enrichedDecks
-  .sort((a, b) => a.rank - b.rank)
-  .slice(0, 10)
-  .forEach(deck => {
-    console.log(`Deck: ${deck.deck_name}`);
-    console.log('-'.repeat(80));
-    
-    // BASIC STATISTICS
-    console.log('BASIC STATISTICS:');
-    console.log(`  Count: ${deck.count} (rounded: ${deck.count_rounded})`);
-    console.log(`  Total Matches: ${deck.total_matches} (rounded: ${deck.total_matches_rounded})`);
-    console.log(`  Record: ${deck.wins}W - ${deck.losses}L - ${deck.ties}T`);
-    console.log();
-    
-    // PERFORMANCE METRICS
-    console.log('PERFORMANCE METRICS:');
-    console.log(`  Win Rate: ${deck.win_rate.toFixed(2)}% (rounded: ${deck.win_rate_rounded}%)`);
-    console.log(`  Adjusted Win Rate: ${deck.adjusted_win_rate.toFixed(2)}%`);
-    console.log(`  Avg Tournament Depth: ${deck.avg_tournament_depth.toFixed(2)}`);
-    console.log();
-    
-    // META STATISTICS
-    console.log('META STATISTICS:');
-    console.log(`  Share: ${deck.share.toFixed(2)}% (rounded: ${deck.share_rounded}%)`);
-    console.log(`  Share vs Most Played: ${deck.share_compared_to_most_played_deck.toFixed(2)}%`);
-    console.log(`  Meta Impact: ${deck.meta_impact.toFixed(2)}`);
-    console.log();
-    
-    // RANKING & RATING
-    console.log('RANKING & RATING:');
-    console.log(`  Rank: #${deck.rank}`);
-    console.log(`  Rating: ${deck.rating.toFixed(2)}/100+`);
-    console.log(`  Tier: ${deck.tier_display}`);
-    console.log();
-    
-    // PERCENTILES
-    console.log('PERCENTILES:');
-    console.log(`  Rating Percentile: ${deck.rating_pct.toFixed(1)}%`);
-    console.log(`  Count Percentile: ${deck.count_pct.toFixed(1)}%`);
-    console.log(`  Total Matches Percentile: ${deck.total_matches_pct.toFixed(1)}%`);
-    console.log(`  Win Rate Percentile: ${deck.win_rate_pct.toFixed(1)}%`);
-    console.log(`  Adjusted Win Rate Percentile: ${deck.adjusted_win_rate_pct.toFixed(1)}%`);
-    console.log(`  Avg Matches Percentile: ${deck.avg_tournament_depth_pct.toFixed(1)}%`);
-    console.log(`  Meta Impact Percentile: ${deck.meta_impact_pct.toFixed(1)}%`);
-    console.log();
-    console.log('='.repeat(80));
-    console.log();
-  });
+enrichedDecks.slice(0, 10).forEach(deck => {
+  console.log(`Deck: ${deck.deck_name}`);
+  console.log('-'.repeat(80));
+  console.log('BASIC STATISTICS:');
+  console.log(`  Count: ${deck.count} (rounded: ${deck.count_rounded})`);
+  console.log(`  Total Matches: ${deck.total_matches} (rounded: ${deck.total_matches_rounded})`);
+  console.log(`  Record: ${deck.wins}W - ${deck.losses}L - ${deck.ties}T`);
+  console.log();
+  console.log('PERFORMANCE METRICS:');
+  console.log(`  Win Rate: ${deck.win_rate.toFixed(2)}% (rounded: ${deck.win_rate_rounded}%)`);
+  console.log(`  Adjusted Win Rate: ${deck.adjusted_win_rate.toFixed(2)}%`);
+  console.log(`  Avg Tournament Depth: ${deck.avg_tournament_depth.toFixed(2)}`);
+  console.log();
+  console.log('META STATISTICS:');
+  console.log(`  Share: ${deck.share.toFixed(2)}% (rounded: ${deck.share_rounded}%)`);
+  console.log(`  Share vs Most Played: ${deck.share_compared_to_most_played_deck.toFixed(2)}%`);
+  console.log(`  Meta Impact: ${deck.meta_impact.toFixed(2)}`);
+  console.log();
+  console.log('RANKING & RATING:');
+  console.log(`  Rank: #${deck.rank}`);
+  console.log(`  Rating: ${deck.rating.toFixed(2)}/100+`);
+  console.log(`  Tier: ${deck.tier_display}`);
+  console.log();
+  console.log('PERCENTILES:');
+  console.log(`  Rating Percentile: ${deck.rating_pct.toFixed(1)}%`);
+  console.log(`  Count Percentile: ${deck.count_pct.toFixed(1)}%`);
+  console.log(`  Total Matches Percentile: ${deck.total_matches_pct.toFixed(1)}%`);
+  console.log(`  Win Rate Percentile: ${deck.win_rate_pct.toFixed(1)}%`);
+  console.log(`  Adjusted Win Rate Percentile: ${deck.adjusted_win_rate_pct.toFixed(1)}%`);
+  console.log(`  Avg Matches Percentile: ${deck.avg_tournament_depth_pct.toFixed(1)}%`);
+  console.log(`  Meta Impact Percentile: ${deck.meta_impact_pct.toFixed(1)}%`);
+  console.log();
+  console.log('='.repeat(80));
+  console.log();
+});
 
 console.log(`Note: Showing top 10 decks out of ${enrichedDecks.length} total decks analyzed.`);
-console.log();
 
 // ============================================================================
 // VERIFICATION: CONFIRM ALL CONDITIONS ARE CALCULATED
 // ============================================================================
 
-// This section verifies that all required deck analysis conditions are present
 const requiredConditions = [
   'deck_name', 'count', 'wins', 'losses', 'ties',
   'total_matches', 'win_rate', 'adjusted_win_rate', 'avg_tournament_depth',
@@ -1841,13 +1605,11 @@ if (missingConditions.length > 0) {
 }
 
 // ============================================================================
-// EXPORT ENRICHED DATA
+// EXPORT
 // ============================================================================
 
-// Export the enriched deck data for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = enrichedDecks;
 } else if (typeof window !== 'undefined') {
-  // Make available in browser environment
   window.enrichedDecks = enrichedDecks;
 }
