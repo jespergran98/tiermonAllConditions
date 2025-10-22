@@ -27,7 +27,7 @@ The deck's raw number of tournament appearances, rounded to the nearest 5, 10, o
 Example: "This underdog deck appeared in {count_rounded}+ tournaments"
 
 share
-The deck's usage percentage in the metagame, calculated as (count / total Count) × 100
+The deck's usage percentage in the metagame, calculated as (total_matches / totalGames) × 100
 Example: "share: { min: 0.4, max: 5.00 }" means the deck represents between 0.4% and 5% of all tournament entries.
 
 share_compared_to_most_played_deck
@@ -35,10 +35,12 @@ The deck's share relative to the most popular deck, expressed as a percentage.
 Example: "share_compared_to_most_played_deck: { min: 10 }" means the deck's share is at least 10% of the most played deck's share.
 
 share_rounded
-The deck's usage percentage in the metagame, calculated as (count / total Count) × 100, rounded to the nearest whole number.
+The deck's usage percentage in the metagame, calculated as (total_matches / totalGames) × 100, rounded to the nearest whole number.
 rounded is mostly used in template descriptions, for example: "This deck shines through the top of the META, even at only { share_rounded } of the meta share"
 
-count_share
+tournament_share
+The deck's tournament entry percentage, calculated as (count / totalCount) × 100. This represents what proportion of tournament entries used this deck, regardless of how far they advanced.
+Example: "tournament_share: 15.2%" means 15.2% of all tournament participants brought this deck
 
 total_matches
 The deck's total number of matches played, calculated as wins + losses + ties.
