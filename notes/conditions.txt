@@ -89,3 +89,6 @@ Example: "meta_impact_pct: { min: 75 }" means the deck is in at least the 75th p
 tier
 The deck's assigned tier based on its rating (e.g., S, A, B, C, with S being the highest).
 Example: "tier: { min: C, max: S }" means the deck is in tier C or higher (up to S).
+
+(NOTE: REMEMBER: SIMPLE - DEFAULT - ADVANCED LAYOUT)
+compact, grid, deep dive
