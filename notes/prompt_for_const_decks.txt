@@ -6,3 +6,7 @@ const decks = [
 ];
 
 Provide the code in a JavaScript array.
+
+---
+
+list the placement, names, win % and popularity of these 30 decks:
