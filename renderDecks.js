@@ -211,6 +211,8 @@ function applyFiltersAndSort() {
         return b.count - a.count;
       case 'metaImpact':
         return b.meta_impact - a.meta_impact;
+      case 'depth':
+        return b.avg_tournament_depth - a.avg_tournament_depth;
       default:
         return a.rank - b.rank;
     }
