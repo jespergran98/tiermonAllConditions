@@ -44,10 +44,10 @@ const CONFIG = {
     
     // META ADJUSTMENT K (Dataset Size Sensitivity)
     // Controls how z-scores scale with total dataset size
-    // • Higher values (300+) = Takes longer to reach full confidence, more conservative overall
+    // • Higher values (500+) = Takes longer to reach full confidence, more conservative overall
     // • Lower values (50-100) = Quickly reaches full confidence, less conservative
-    // Formula: adjustment = 1 - e^(-totalInstances/k)
-    metaAdjustmentK: 150,
+    // Formula: adjustment = 1 - e^(-totalInstances/k), ONLY ADJUST THIS NUMBER ON SMALL SAMPLE SIZES
+    metaAdjustmentK: 500,
     
     // SHARE PENALTY K (Low Popularity Dampening)
     // Exponentially reduces ratings for decks with very low play rates
@@ -71,19 +71,19 @@ const CONFIG = {
     
     // RATING SCALE
     // Final rating is multiplied by this to get 0-100 scale
-    ratingScale: 195
+    ratingScale: 190
 
   },
   tiers: {
     X: 100,        // Exceptional
     Splus: 95,     // Elite+
     S: 90,         // Elite
-    A: 86,         // Excellent
-    B: 82,         // Good
-    C: 78,         // Above Average
-    D: 73,         // Average
-    E: 68,         // Below Average
-    F: 60          // Poor
+    A: 85,         // Excellent
+    B: 80,         // Good
+    C: 74,         // Above Average
+    D: 68,         // Average
+    E: 61,         // Below Average
+    F: 53          // Poor
   },
   tierDisplay: {
     'Splus': 'S+', 'X': 'X', 'S': 'S', 'A': 'A', 'B': 'B',
@@ -1378,11 +1378,10 @@ const calculateBetaParams = (mean, variance) => {
 
 const hierarchicalBayesianHybrid = (allData) => {
   const totalDecks = allData.length;
-  const totalInstances = allData.reduce((sum, d) => sum + d.count, 0);
-  const metaAdjustment = getMetaAdjustmentFactor(totalInstances);
+  const totalGames = allData.reduce((sum, d) => sum + d.total_matches, 0);
+  const metaAdjustment = getMetaAdjustmentFactor(totalGames);
   
   // Calculate win rate priors
-  const totalGames = allData.reduce((sum, d) => sum + d.total_matches, 0);
   const weightedWinRateMean = allData.reduce((sum, d) => 
     sum + d.adjusted_win_rate_raw * d.total_matches, 0) / totalGames;
   const winRateVariance = allData.reduce((sum, d) => 
@@ -1391,9 +1390,9 @@ const hierarchicalBayesianHybrid = (allData) => {
   
   // Calculate share priors
   const weightedShareMean = allData.reduce((sum, d) => 
-    sum + d.share_raw * d.count, 0) / totalInstances;
+    sum + d.share_raw * d.total_matches, 0) / totalGames;
   const shareVariance = allData.reduce((sum, d) => 
-    sum + Math.pow(d.share_raw - weightedShareMean, 2) * d.count, 0) / totalInstances;
+    sum + Math.pow(d.share_raw - weightedShareMean, 2) * d.total_matches, 0) / totalGames;
   const sharePrior = calculateBetaParams(weightedShareMean, shareVariance);
   
   // Calculate posteriors for each deck
@@ -1411,8 +1410,8 @@ const hierarchicalBayesianHybrid = (allData) => {
       adjustedWRZ * Math.sqrt(posteriorWinRateVar));
     
     // Share posterior
-    const postAlphaShare = sharePrior.alpha + deck.count;
-    const postBetaShare = sharePrior.beta + (totalInstances - deck.count);
+    const postAlphaShare = sharePrior.alpha + deck.total_matches;
+    const postBetaShare = sharePrior.beta + (totalGames - deck.total_matches);
     const posteriorShare = postAlphaShare / (postAlphaShare + postBetaShare);
     const posteriorShareVar = (postAlphaShare * postBetaShare) / 
       ((postAlphaShare + postBetaShare) ** 2 * (postAlphaShare + postBetaShare + 1));
@@ -1482,15 +1481,17 @@ const calculateDeckStatistics = (rawDecks) => {
   });
   
   // Step 2: Calculate share metrics
+  const totalGames = withBasics.reduce((sum, d) => sum + d.total_matches, 0);
   const totalCount = withBasics.reduce((sum, d) => sum + d.count, 0);
-  const mostPlayedCount = Math.max(...withBasics.map(d => d.count));
-  const mostPlayedShare = (mostPlayedCount / totalCount) * 100;
+  const mostPlayedMatches = Math.max(...withBasics.map(d => d.total_matches));
+  const mostPlayedShare = (mostPlayedMatches / totalGames) * 100;
   
   const withShares = withBasics.map(deck => ({
     ...deck,
-    share: (deck.count / totalCount) * 100,
-    share_raw: deck.count / totalCount,
-    share_compared_to_most_played_deck: ((deck.count / totalCount) * 100) / mostPlayedShare * 100
+    share: (deck.total_matches / totalGames) * 100,
+    share_raw: deck.total_matches / totalGames,
+    count_share: (deck.count / totalCount) * 100,
+    share_compared_to_most_played_deck: ((deck.total_matches / totalGames) * 100) / mostPlayedShare * 100
   }));
   
   // Step 3: Calculate meta impact and apply Bayesian analysis

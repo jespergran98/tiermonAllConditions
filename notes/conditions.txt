@@ -38,6 +38,8 @@ share_rounded
 The deck's usage percentage in the metagame, calculated as (count / total Count) × 100, rounded to the nearest whole number.
 rounded is mostly used in template descriptions, for example: "This deck shines through the top of the META, even at only { share_rounded } of the meta share"
 
+count_share
+
 total_matches
 The deck's total number of matches played, calculated as wins + losses + ties.
 Example: "total_matches: { min: 1000, max: 5000 }" means the deck was played between 1000 and 5000 times.
