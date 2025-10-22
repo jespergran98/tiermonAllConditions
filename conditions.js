@@ -1386,11 +1386,11 @@ enrichedDecks.forEach(deck => {
 // STEP 4: HIERARCHICAL BAYESIAN RANKING ALGORITHM (WIN RATE + SHARE HYBRID)
 // ============================================================================
 
-// Z-scores: 2.0 for win rate (95% CI), 1.5 for share (less volatile)
+// Z-scores: 2.0 for win rate (95% CI), 1.5 for share
 const WIN_RATE_Z_SCORE = 2.0;
 const SHARE_Z_SCORE = 1.5;
 
-// Weighting: 90% performance, 10% popularity (increased win rate impact)
+// Weighting: 90% performance, 10% popularity
 const WIN_RATE_WEIGHT = 0.9;
 const SHARE_WEIGHT = 1 - WIN_RATE_WEIGHT;
 
@@ -1408,7 +1408,7 @@ const getMetaAdjustmentFactor = (totalInstances) => {
 
 /**
  * Exponential penalty for low-share decks. Prevents outliers from dominating.
- * Uses an exponential curve: 1 - exp(-k * share), where k=1 for tuning.
+ * Uses an exponential curve: 1 - exp(-k * share), where k=2.1 for tuning.
  * - Approaches 1.0 for high shares (>5%: barely affected, e.g., 0.993 at 5%)
  * - Gradually decreases for lower shares, severely penalizing very low shares (e.g., 0.01 at 0.01%)
  * Scales continuously from 0% to 100%, with stronger impact on low percentages.
@@ -1568,8 +1568,7 @@ const hierarchicalBayesianHybrid = (allData) => {
 };
 
 /**
- * Converts 0-1 metric to 0-220 strength scale.
- * Scale: 110 = average (50%), 132 = strong (60%), 154 = very strong (70%)
+ * Converts 0-1 metric to 0-195 strength scale. (decks rarely exceed 100)
  */
 const calculateStrength = (metric) => metric * 195;
 
@@ -1644,17 +1643,17 @@ enrichedDecks.forEach(deck => {
     deck.tier = 'Splus';      // Elite+
   } else if (deck.rating >= 90) {
     deck.tier = 'S';          // Elite
-  } else if (deck.rating >= 75) {
+  } else if (deck.rating >= 80) {
     deck.tier = 'A';          // Excellent
-  } else if (deck.rating >= 65) {
+  } else if (deck.rating >= 72.5) {
     deck.tier = 'B';          // Good
-  } else if (deck.rating >= 60) {
+  } else if (deck.rating >= 65) {
     deck.tier = 'C';          // Above Average
-  } else if (deck.rating >= 55) {
+  } else if (deck.rating >= 57.5) {
     deck.tier = 'D';          // Average
   } else if (deck.rating >= 50) {
     deck.tier = 'E';          // Below Average
-  } else if (deck.rating >= 35) {
+  } else if (deck.rating >= 40) {
     deck.tier = 'F';          // Poor
   } else {
     deck.tier = 'Unranked';   // Very Poor
