@@ -1260,6 +1260,7 @@ const decks = [
   { deck_name: "Lanturn ex Raikou ex", count: 1, wins: 0, losses: 1, ties: 0 }
 ];
 
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -1408,13 +1409,13 @@ const getMetaAdjustmentFactor = (totalInstances) => {
 
 /**
  * Exponential penalty for low-share decks. Prevents outliers from dominating.
- * Uses an exponential curve: 1 - exp(-k * share), where k=2.1 for tuning.
+ * Uses an exponential curve: 1 - exp(-k * share), where k=2.2 for tuning.
  * - Approaches 1.0 for high shares (>5%: barely affected, e.g., 0.993 at 5%)
  * - Gradually decreases for lower shares, severely penalizing very low shares (e.g., 0.01 at 0.01%)
  * Scales continuously from 0% to 100%, with stronger impact on low percentages.
  */
 const calculateSharePenalty = (share) => {
-  const k = 2.1; // Higher number means less played decks still have a chance to appear on the top of the leaderboard
+  const k = 2.2; // Higher number means less played decks still have a chance to appear on the top of the leaderboard
   return 1 - Math.exp(-k * share);
 };
 
@@ -1643,17 +1644,17 @@ enrichedDecks.forEach(deck => {
     deck.tier = 'Splus';      // Elite+
   } else if (deck.rating >= 90) {
     deck.tier = 'S';          // Elite
-  } else if (deck.rating >= 80) {
+  } else if (deck.rating >= 85) {
     deck.tier = 'A';          // Excellent
-  } else if (deck.rating >= 72.5) {
+  } else if (deck.rating >= 78) {
     deck.tier = 'B';          // Good
-  } else if (deck.rating >= 65) {
+  } else if (deck.rating >= 71) {
     deck.tier = 'C';          // Above Average
-  } else if (deck.rating >= 57.5) {
+  } else if (deck.rating >= 64) {
     deck.tier = 'D';          // Average
-  } else if (deck.rating >= 50) {
+  } else if (deck.rating >= 57) {
     deck.tier = 'E';          // Below Average
-  } else if (deck.rating >= 40) {
+  } else if (deck.rating >= 50) {
     deck.tier = 'F';          // Poor
   } else {
     deck.tier = 'Unranked';   // Very Poor
